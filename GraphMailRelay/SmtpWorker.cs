@@ -43,13 +43,17 @@ namespace GraphMailRelay
 			// Create linked token to allow cancelling executing task from provided token
 			_stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
+			// Confirm provided configuration parameters are valid.
+			ValidateOptions();
+
+			// Initialize worker operations.
+			InitializeWorker();
+		}
+
+		private bool ValidateOptions()
+		{
 			// Get the name of this worker class.
 			string workerName = GetType().Name;
-
-			// We're going to need to use these settings multiple times and potentially in error messages, so pull them into local variables.
-			string? serverName = _options.ServerName;
-			int? serverPort = _options.ServerPort;
-			List<string>? allowedSenderAddresses = _options.AllowedSenderAddresses;
 
 			// Define some lists and variables we'll use later to write missing or invalid settings to the log and abort application startup.
 			List<string> optionsMissing = new();
@@ -59,9 +63,9 @@ namespace GraphMailRelay
 			// Begin validation of provided configuration parameters.
 
 			// Validate serverName.
-			if (serverName is not null)
+			if (_options.ServerName is not null)
 			{
-				if (!Uri.CheckHostName(serverName).Equals(UriHostNameType.Dns))
+				if (!Uri.CheckHostName(_options.ServerName).Equals(UriHostNameType.Dns))
 				{
 					optionsInvalid.Add(string.Format("{0}:ServerName ('{1}' is not a valid DNS host name)", SmtpWorkerOptions.SmtpConfiguration));
 					optionsValidationFailed = true;
@@ -74,11 +78,11 @@ namespace GraphMailRelay
 			}
 
 			// Validate serverPort.
-			if (serverPort is not null)
+			if (_options.ServerPort is not null)
 			{
 				var serverPortsWellKnown = new List<int> { 25, 465, 587 };
 
-				if (!(serverPortsWellKnown.Contains((int)serverPort) || (int)serverPort >= 1024))
+				if (!(serverPortsWellKnown.Contains((int)_options.ServerPort) || (int)_options.ServerPort >= 1024))
 				{
 					optionsInvalid.Add(string.Format("{0}:ServerPort ('{1}' is not a valid SMTP server port option)", SmtpWorkerOptions.SmtpConfiguration));
 					optionsValidationFailed = true;
@@ -92,19 +96,19 @@ namespace GraphMailRelay
 			}
 
 			// Validate AllowedSenderAddresses.
-			if (allowedSenderAddresses is not null)
+			if (_options.AllowedSenderAddresses is not null)
 			{
-				allowedSenderAddresses.Sort();
+				_options.AllowedSenderAddresses.Sort();
 
 				// TODO: Reconfigure SmtpWorkerOptions to pull actual IP/DNS name objects and use those for SmtpWorkerFilter instead?
-				if (!allowedSenderAddresses.Any())
+				if (!_options.AllowedSenderAddresses.Any())
 				{
 					// TODO: Doesn't seem to ever be hit, as if the JSON array is present but empty in config file, AllowedSenderAddresses is null. Remove?
 					optionsInvalid.Add(string.Format("{0}:AllowedSenderAddresses (no allowed sender addresses provided; relay would reject all incoming mail)", SmtpWorkerOptions.SmtpConfiguration));
 					optionsValidationFailed = true;
 				}
 
-				foreach (string address in allowedSenderAddresses)
+				foreach (string address in _options.AllowedSenderAddresses)
 				{
 					if (!IPAddress.IsValid(address) && !Uri.CheckHostName(address).Equals(UriHostNameType.Dns))
 					{
@@ -153,15 +157,22 @@ namespace GraphMailRelay
 				}
 				_applicationLifetime.StopApplication();
 
-				return;
 			}
+
+			return !optionsValidationFailed;
+		}
+
+		private void InitializeWorker()
+		{
+			// Get the name of this worker class.
+			string workerName = GetType().Name;
 
 			// Begin setup of the SmtpServer object that will handle receiving mail.
 			_logger.LogDebug("Initializing {@workerName}...", workerName);
 
 			var smtpServiceOptions = new SmtpServerOptionsBuilder()
 				.ServerName(_options.ServerName!)
-				.Port((int)serverPort!)
+				.Port((int)_options.ServerPort!)
 				.Build();
 
 			var smtpServiceProvider = new SmtpServer.ComponentModel.ServiceProvider();
@@ -171,9 +182,11 @@ namespace GraphMailRelay
 			_smtpServer = new SmtpServer.SmtpServer(smtpServiceOptions, smtpServiceProvider);
 
 			// Start the SmtpServer.
-			string serverWhitelist = string.Join(", ", allowedSenderAddresses!.Select(address => address));
 			_workerTask = _smtpServer.StartAsync(_stoppingCts.Token);
 
+			string serverWhitelist = string.Join(", ", _options.AllowedSenderAddresses!.Select(address => address));
+			string serverName = _options.ServerName!;
+			int serverPort = (int)_options.ServerPort!;
 			_logger.LogInformation("Initialized {@workerName} listening on {@serverName}:{@serverPort}; incoming mail will be accepted from the following whitelisted endpoints: {@serverWhitelist}.", workerName, serverName, serverPort, serverWhitelist);
 			return;
 		}

@@ -61,9 +61,6 @@ namespace GraphMailRelay
 
 			// Initialize worker operations.
 			InitializeWorker();
-
-			// Return to host.
-			return;
 		}
 
 		private bool ValidateOptions()
