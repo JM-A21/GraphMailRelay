@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+	<PropertyGroup>
+		<TargetFramework>net7.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UserSecretsId>dotnet-GraphMailRelay-02bed99c-92e9-44c6-a1fa-3fc0a3747108</UserSecretsId>
+		<ServerGarbageCollection>true</ServerGarbageCollection>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Azure.Identity" Version="1.8.2" />
+		<PackageReference Include="McGuireV10.GenericHostBuilderLogger" Version="1.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.1" />
+		<PackageReference Include="Microsoft.Graph" Version="5.3.0" />
+		<PackageReference Include="MimeKit" Version="3.6.1" />
+		<PackageReference Include="SmtpServer" Version="9.0.2" />
+	</ItemGroup>
+</Project>
