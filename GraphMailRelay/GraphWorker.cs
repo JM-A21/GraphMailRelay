@@ -171,11 +171,11 @@ namespace GraphMailRelay
 
 				if (optionsValidationFailedMessageBuilder.Length > 0)
 				{
-					_logger.LogError("Failed to initialize {@workerName} due to the following settings validation failures. Please review configuration file and documentation.\r\n\r\n{@optionsValidationFailedMessage}", workerName, optionsValidationFailedMessage);
+					_logger.LogError("Failed to initialize {@workerName} due to the following settings validation errors. Please review configuration file and documentation.\r\n\r\n{@optionsValidationFailedMessage}", workerName, optionsValidationFailedMessage);
 				}
 				else
 				{
-					_logger.LogCritical("Failed to initialize {@workerName} due to unhandled settings validation failures. Please contact the developer.", workerName);
+					_logger.LogCritical("Failed to initialize {@workerName} due to unhandled settings validation errors. Please contact the developer.", workerName);
 				}
 				_applicationLifetime.StopApplication();
 			}
