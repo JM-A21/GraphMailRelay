@@ -5,11 +5,8 @@ namespace GraphMailRelay
 {
 	public class Program
 	{
-		private const string SmtpWorkerConfigName = "SmtpConfiguration";
-		private const string SmtpWorkerConfigMissingMessage = "Application failed to locate required configuration section name '" + SmtpWorkerConfigName + "' across loaded configuration files. Application will shut down.";
-		
-		private const string GraphWorkConfigName = "GraphConfiguration";
-		private const string GraphWorkerConfigMissingMessage = "Application failed to locate required configuration section name '" + SmtpWorkerConfigName + "' across loaded configuration files. Application will shut down.";
+		private const string SmtpWorkerConfigMissingMessage = "Application failed to locate required configuration section name '" + SmtpWorkerOptions.SmtpConfiguration + "' across loaded configuration files. Application will shut down.";
+		private const string GraphWorkerConfigMissingMessage = "Application failed to locate required configuration section name '" + GraphWorkerOptions.GraphConfiguration + "' across loaded configuration files. Application will shut down.";
 
 		public static async Task Main(string[] args)
 		{
@@ -24,8 +21,7 @@ namespace GraphMailRelay
 					// Configure the application with custom settings locations.
 					.ConfigureAppConfiguration((configuration) =>
 					{
-						// TODO: Add path to app's ProgramData directory and the "appsettings.json" file
-						// that will be contained within.
+						// TODO: Add path to app's ProgramData directory and the "appsettings.json" file that will be contained within.
 						// TODO: Dynamic iteration through folders?
 					})
 
@@ -45,55 +41,37 @@ namespace GraphMailRelay
 						// Add the queue as a singleton. Hope this is right! :) 
 						services.AddSingleton(channelMailQueue);
 
-						// Configure and prepare the SmtpWorker.
-						try
+						// Attempt to retrieve the SmtpWorker settings. GetRequiredSection throws
+						// InvalidOperationException if section is missing. Then confirm the results
+						// are not null.
+						var optionsSmtp = hostContext.Configuration.GetRequiredSection(SmtpWorkerOptions.SmtpConfiguration).Get<SmtpWorkerOptions>();
+						if (optionsSmtp is not null)
 						{
-							// Attempt to retrieve the SmtpWorker settings. GetRequiredSection throws
-							// InvalidOperationException if section is missing. Then confirm the results
-							// are not null.
-							var optionsSmtp = hostContext.Configuration.GetRequiredSection(SmtpWorkerConfigName).Get<SmtpWorkerOptions>();
-							if (optionsSmtp is not null)
-							{
-								services.AddSingleton(optionsSmtp);
-							}
-							else
-							{
-								throw new NullReferenceException(SmtpWorkerConfigMissingMessage);
-							}
-
-							// Build and add the SmtpWorker to the hosted services.
-							services.AddHostedService<SmtpWorker>();
+							services.AddSingleton(optionsSmtp);
 						}
-						catch (InvalidOperationException)
+						else
 						{
-							HostBuilderLogger.Logger.LogError(SmtpWorkerConfigMissingMessage);
-							throw;
+							throw new NullReferenceException(SmtpWorkerConfigMissingMessage);
 						}
 
-						// Configure and prepare the GraphWorker.
-						try
-						{
-							// Attempt to retrieve the GraphWorker settings. GetRequiredSection throws
-							// InvalidOperationException if section is missing. Then confirm the results
-							// are not null.
-							var optionsGraph = hostContext.Configuration.GetRequiredSection(GraphWorkConfigName).Get<GraphWorkerOptions>();
-							if (optionsGraph is not null)
-							{
-								services.AddSingleton(optionsGraph);
-							}
-							else
-							{
-								throw new NullReferenceException(GraphWorkerConfigMissingMessage);
-							}
+						// Build and add the SmtpWorker to the hosted services.
+						services.AddHostedService<SmtpWorker>();
 
-							// Build and add the SmtpWorker to the hosted services.
-							services.AddHostedService<GraphWorker>();
-						}
-						catch (InvalidOperationException)
+						// Attempt to retrieve the GraphWorker settings. GetRequiredSection throws
+						// InvalidOperationException if section is missing. Then confirm the results
+						// are not null.
+						var optionsGraph = hostContext.Configuration.GetRequiredSection(GraphWorkerOptions.GraphConfiguration).Get<GraphWorkerOptions>();
+						if (optionsGraph is not null)
 						{
-							HostBuilderLogger.Logger.LogError(GraphWorkerConfigMissingMessage);
-							throw;
+							services.AddSingleton(optionsGraph);
 						}
+						else
+						{
+							throw new NullReferenceException(GraphWorkerConfigMissingMessage);
+						}
+
+						// Build and add the SmtpWorker to the hosted services.
+						services.AddHostedService<GraphWorker>();
 					})
 
 					.Build();

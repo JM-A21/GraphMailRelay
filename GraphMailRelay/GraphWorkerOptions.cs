@@ -2,7 +2,7 @@
 {
 	internal class GraphWorkerOptions
 	{
-		public const string RelayConfiguration = "GraphConfiguration";
+		public const string GraphConfiguration = "GraphConfiguration";
 
 		public string? AzureTenantId { get; set; }
 		public string? AzureClientId { get; set; }

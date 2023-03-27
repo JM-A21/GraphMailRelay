@@ -1,5 +1,7 @@
 using MimeKit;
+using Org.BouncyCastle.Utilities.Net;
 using SmtpServer;
+using System.Text;
 using System.Threading.Channels;
 
 namespace GraphMailRelay
@@ -10,6 +12,7 @@ namespace GraphMailRelay
 		private Task? _workerTask;
 		private bool disposedValue;
 
+		private readonly IHostApplicationLifetime _applicationLifetime;
 		private readonly ILogger<SmtpWorker> _logger;
 		private readonly SmtpWorkerOptions _options;
 		private readonly ChannelWriter<KeyValuePair<Guid, MimeMessage>> _queueWriter;
@@ -17,10 +20,12 @@ namespace GraphMailRelay
 		private SmtpServer.SmtpServer? _smtpServer;
 
 		public SmtpWorker(
+			IHostApplicationLifetime applicationLifetime,
 			ILogger<SmtpWorker> logger,
 			SmtpWorkerOptions optionsSmtp,
 			Channel<KeyValuePair<Guid, MimeMessage>> queue)
 		{
+			_applicationLifetime = applicationLifetime;
 			_logger = logger;
 			_options = optionsSmtp;
 			_queueWriter = queue.Writer;
@@ -33,51 +38,147 @@ namespace GraphMailRelay
 		//     Dispose(disposing: false);
 		// }
 
-		async Task IHostedService.StartAsync(CancellationToken cancellationToken)
+		public async Task StartAsync(CancellationToken cancellationToken)
 		{
 			// Create linked token to allow cancelling executing task from provided token
 			_stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-			// Get name of worker for log messages.
+			// Get the name of this worker class.
 			string workerName = GetType().Name;
 
-			// Verify required configuration parameters are available.
-			if (_options.ServerName is not null &&
-				_options.ServerPort is not null &&
-				_options.AllowedSenderAddresses is not null)
+			// We're going to need to use these settings multiple times and potentially in error messages, so pull them into local variables.
+			string? serverName = _options.ServerName;
+			int? serverPort = _options.ServerPort;
+			List<string>? allowedSenderAddresses = _options.AllowedSenderAddresses;
+
+			// Define some lists and variables we'll use later to write missing or invalid settings to the log and abort application startup.
+			List<string> optionsMissing = new();
+			List<string> optionsInvalid = new();
+			bool optionsValidationFailed = false;
+
+			// Begin validation of provided configuration parameters.
+
+			// Validate serverName.
+			if (serverName is not null)
 			{
-				// Begin setup of the SmtpServer object that will handle receiving mail.
-				_logger.LogDebug("Initializing {@workerName}...", workerName);
-
-				var smtpServiceOptions = new SmtpServerOptionsBuilder()
-					.ServerName(_options.ServerName)
-					.Port(_options.ServerPort.GetValueOrDefault())
-					.Build();
-
-				var smtpServiceProvider = new SmtpServer.ComponentModel.ServiceProvider();
-				smtpServiceProvider.Add(new SmtpWorkerFilter(_logger, _options));
-				smtpServiceProvider.Add(new SmtpWorkerRelayStore(_queueWriter));
-
-				_smtpServer = new SmtpServer.SmtpServer(smtpServiceOptions, smtpServiceProvider);
-
-				// Start the SmtpServer.
-				string serverName = _options.ServerName;
-				int serverPort = _options.ServerPort.GetValueOrDefault();
-				string serverWhitelist = string.Join(", ", _options.AllowedSenderAddresses.Select(address => address));
-				_logger.LogInformation("Initialized {@workerName} at {@serverName}:{@serverPort}; incoming mail will be accepted from the following whitelisted endpoints: {@serverWhitelist}. Starting SMTP server.", workerName, serverName, serverPort, serverWhitelist);
-				_workerTask = _smtpServer.StartAsync(_stoppingCts.Token);
+				if (!Uri.CheckHostName(serverName).Equals(UriHostNameType.Dns))
+				{
+					optionsInvalid.Add(string.Format("{0}:ServerName ('{1}' is not a valid DNS host name)", SmtpWorkerOptions.SmtpConfiguration));
+					optionsValidationFailed = true;
+				}
 			}
 			else
 			{
-				// Write error message indicating that we're missing configuration parameters, then request that worker start be cancelled.
-				_logger.LogError("Failed to initialize {@workerName}. One or more required server parameters are missing. Please review configuration file and documentation.", workerName);
-				_stoppingCts.Cancel();
+				optionsMissing.Add(string.Format("{0}:ServerName", SmtpWorkerOptions.SmtpConfiguration));
+				optionsValidationFailed = true;
 			}
 
+			// Validate serverPort.
+			if (serverPort is not null)
+			{
+				var serverPortsWellKnown = new List<int> { 25, 465, 587 };
+
+				if (!(serverPortsWellKnown.Contains((int)serverPort) || (int)serverPort >= 1024))
+				{
+					optionsInvalid.Add(string.Format("{0}:ServerPort ('{1}' is not a valid SMTP server port option)", SmtpWorkerOptions.SmtpConfiguration));
+					optionsValidationFailed = true;
+				}
+
+			}
+			else
+			{
+				optionsMissing.Add(string.Format("{0}:ServerPort", SmtpWorkerOptions.SmtpConfiguration));
+				optionsValidationFailed = true;
+			}
+
+			// Validate AllowedSenderAddresses.
+			if (allowedSenderAddresses is not null)
+			{
+				allowedSenderAddresses.Sort();
+
+				// TODO: Reconfigure SmtpWorkerOptions to pull actual IP/DNS name objects and use those for SmtpWorkerFilter instead?
+				if (!allowedSenderAddresses.Any())
+				{
+					// TODO: Doesn't seem to ever be hit, as if the JSON array is present but empty in config file, AllowedSenderAddresses is null. Remove?
+					optionsInvalid.Add(string.Format("{0}:AllowedSenderAddresses (no allowed sender addresses provided; relay would reject all incoming mail)", SmtpWorkerOptions.SmtpConfiguration));
+					optionsValidationFailed = true;
+				}
+
+				foreach (string address in allowedSenderAddresses)
+				{
+					if (!IPAddress.IsValid(address) && !Uri.CheckHostName(address).Equals(UriHostNameType.Dns))
+					{
+						optionsInvalid.Add(string.Format("{0}:AllowedSenderAddresses ('{1}' is not a valid IP address or DNS host name)", SmtpWorkerOptions.SmtpConfiguration, address));
+						optionsValidationFailed = true;
+					}
+				}
+			}
+			else
+			{
+				optionsMissing.Add(string.Format("{0}:AllowedSenderAddresses", SmtpWorkerOptions.SmtpConfiguration));
+				optionsValidationFailed = true;
+			}
+
+			// Determine if validation failed. If so, build and log error message indicating which options are missing or invalid.
+			if (optionsValidationFailed)
+			{
+				StringBuilder optionsValidationFailedMessageBuilder = new();
+
+				if (optionsMissing.Any())
+				{
+					foreach (string option in optionsMissing)
+					{
+						optionsValidationFailedMessageBuilder.AppendLine("Missing: " + option);
+					}
+					if (optionsInvalid.Any()) { optionsValidationFailedMessageBuilder.AppendLine(); }
+				}
+
+				if (optionsInvalid.Any())
+				{
+					foreach (string option in optionsInvalid)
+					{
+						optionsValidationFailedMessageBuilder.AppendLine("Invalid: " + option);
+					}
+				}
+
+				string optionsValidationFailedMessage = optionsValidationFailedMessageBuilder.ToString();
+
+				if (optionsValidationFailedMessageBuilder.Length > 0)
+				{
+					_logger.LogError("Failed to initialize {@workerName} due to the following settings validation failures. Please review configuration file and documentation.\r\n\r\n{@optionsValidationFailedMessage}", workerName, optionsValidationFailedMessage);
+				}
+				else
+				{
+					_logger.LogCritical("Failed to initialize {@workerName} due to unhandled settings validation failures. Please contact the developer.", workerName);
+				}
+				_applicationLifetime.StopApplication();
+
+				return;
+			}
+
+			// Begin setup of the SmtpServer object that will handle receiving mail.
+			_logger.LogDebug("Initializing {@workerName}...", workerName);
+
+			var smtpServiceOptions = new SmtpServerOptionsBuilder()
+				.ServerName(_options.ServerName!)
+				.Port((int)serverPort!)
+				.Build();
+
+			var smtpServiceProvider = new SmtpServer.ComponentModel.ServiceProvider();
+			smtpServiceProvider.Add(new SmtpWorkerFilter(_logger, _options));
+			smtpServiceProvider.Add(new SmtpWorkerRelayStore(_queueWriter));
+
+			_smtpServer = new SmtpServer.SmtpServer(smtpServiceOptions, smtpServiceProvider);
+
+			// Start the SmtpServer.
+			string serverWhitelist = string.Join(", ", allowedSenderAddresses!.Select(address => address));
+			_workerTask = _smtpServer.StartAsync(_stoppingCts.Token);
+
+			_logger.LogInformation("Initialized {@workerName} listening on {@serverName}:{@serverPort}; incoming mail will be accepted from the following whitelisted endpoints: {@serverWhitelist}.", workerName, serverName, serverPort, serverWhitelist);
 			return;
 		}
 
-		async Task IHostedService.StopAsync(CancellationToken cancellationToken)
+		public async Task StopAsync(CancellationToken cancellationToken)
 		{
 			// Stop called without start
 			if (_workerTask == null)
@@ -97,7 +198,7 @@ namespace GraphMailRelay
 			}
 		}
 
-		void IDisposable.Dispose()
+		public void Dispose()
 		{
 			// Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
 			Dispose(disposing: true);
