@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Options;
 using MimeKit;
+using OpenTelemetry.Trace;
 using System.Threading.Channels;
 
 namespace GraphMailRelay
@@ -28,9 +30,7 @@ namespace GraphMailRelay
 					// Configure the worker services themselves and pass in needed objects.
 					.ConfigureServices((hostContext, services) =>
 					{
-
-						// Build the unbounded channel object we'll use as a producer/consumer work queue
-						// between SmtpWorker/RelayWorker.
+						// Build the unbounded channel object we'll use as a producer/consumer work queue between SmtpWorker/GraphWorker.
 						var channelMailQueue = Channel.CreateUnbounded<KeyValuePair<Guid, MimeMessage>>(
 							new UnboundedChannelOptions
 							{
@@ -72,6 +72,30 @@ namespace GraphMailRelay
 
 						// Build and add the SmtpWorker to the hosted services.
 						services.AddHostedService<GraphWorker>();
+
+						// Configure OpenTelemetry and web request logging.
+						services.AddOpenTelemetry()
+							.WithTracing((builder) =>
+							{
+								builder
+									.AddSource(nameof(GraphWorker))
+									.AddHttpClientInstrumentation(httpOptions =>
+									{
+										httpOptions.FilterHttpRequestMessage = (httpRequestMessage) =>
+										{
+											return optionsGraph.HttpResponseCapture.GetValueOrDefault();
+										};
+
+										httpOptions.EnrichWithHttpResponseMessage = (activity, httpResponseMessage) =>
+										{
+											if (httpResponseMessage is not null)
+											{
+												activity.SetTag("http.response_content", httpResponseMessage.Content.ReadAsStringAsync().Result);
+											}
+										};
+									})
+									.AddConsoleExporter();
+							});
 					})
 
 					.Build();

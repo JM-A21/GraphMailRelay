@@ -131,17 +131,17 @@ namespace GraphMailRelay
 				optionsValidationFailed = true;
 			}
 
-			if (_options.GraphEnvironmentName is not null)
+			if (_options.EnvironmentName is not null)
 			{
-				if (!_graphEnvironmentsSupported.Contains(_options.GraphEnvironmentName))
+				if (!_graphEnvironmentsSupported.Contains(_options.EnvironmentName))
 				{
-					optionsInvalid.Add(string.Format("{0}:GraphEnvironmentName ('{1}' is not a supported Graph environment name)", GraphWorkerOptions.GraphConfiguration, _options.GraphEnvironmentName));
+					optionsInvalid.Add(string.Format("{0}:EnvironmentName ('{1}' is not a supported Graph environment name)", GraphWorkerOptions.GraphConfiguration, _options.EnvironmentName));
 					optionsValidationFailed = true;
 				}
 			}
 			else
 			{
-				optionsMissing.Add(string.Format("{0}:GraphEnvironmentName", GraphWorkerOptions.GraphConfiguration));
+				optionsMissing.Add(string.Format("{0}:EnvironmentName", GraphWorkerOptions.GraphConfiguration));
 				optionsValidationFailed = true;
 			}
 
@@ -194,7 +194,7 @@ namespace GraphMailRelay
 			Uri azureAuthorityHost;
 			Uri graphBaseUri;
 
-			switch (_options.GraphEnvironmentName)
+			switch (_options.EnvironmentName)
 			{
 				case "GraphGlobal":
 					azureAuthorityHost = AzureAuthorityHosts.AzurePublicCloud;

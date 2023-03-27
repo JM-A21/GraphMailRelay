@@ -8,6 +8,8 @@
 		public string? AzureClientId { get; set; }
 		public string? AzureClientSecret { get; set; }
 		public string? AzureMailUser { get; set; }
-		public string? GraphEnvironmentName { get; set; }
+		public string? EnvironmentName { get; set; }
+
+		public bool? HttpResponseCapture { get; set; }
 	}
 }
