@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Options;
 using MimeKit;
 using OpenTelemetry.Trace;
 using System.Threading.Channels;

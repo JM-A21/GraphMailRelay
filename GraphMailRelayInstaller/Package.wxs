@@ -1,0 +1,10 @@
+﻿<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+	<Package Name="Graph Mail Relay" Manufacturer="JM-A21" Version="1.1.0.0" Compressed="true" Scope="perMachine" UpgradeCode="b2ce958a-60cb-4cd3-99da-b57165023003">
+		<MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeError)" />
+		<MediaTemplate EmbedCab="true"/>
+
+		<Feature Id="Main">
+			<ComponentGroupRef Id="ApplicationComponents" />
+		</Feature>
+	</Package>
+</Wix>

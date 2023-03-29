@@ -1,0 +1,24 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+	<Fragment>
+		<ComponentGroup Id="ApplicationComponents" Directory="INSTALLFOLDER">
+			<ComponentGroupRef Id="ApplicationBinaryComponents" />
+			<Component Id="GraphMailRelayService">
+				<!--<ServiceInstall Id="GraphMailRelayService"
+								Name="GraphMailRelayService"
+								DisplayName="Graph Mail Relay Service"
+								Description="A simple relay service that accepts incoming mail on a configurable port and relays it via the Microsoft Graph API."
+								Vital="true" Interactive="false" Start="auto" Type="ownProcess" ErrorControl="normal" Account="LocalSystem">
+					<util:ServiceConfig FirstFailureActionType="restart"
+										SecondFailureActionType="restart"
+										ThirdFailureActionType="restart"
+										ResetPeriodInDays="1"
+										RestartServiceDelayInSeconds="60" />
+				</ServiceInstall>
+				<ServiceControl Id="GraphMailRelayService" Name="GraphMailRelayService" Start="install" Stop="both" Remove="uninstall" />-->
+			</Component>
+		</ComponentGroup>
+
+		<ComponentGroup Id="ProgramDataComponents" Directory="PROGRAMDATAFOLDER">
+		</ComponentGroup>
+	</Fragment>
+</Wix>
