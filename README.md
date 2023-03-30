@@ -12,12 +12,12 @@ The application is structured into two parts, an SMTP Relay (built by the excell
 
 Currently, the SmtpServer portion of this relay is only set up for plain and unencrypted SMTP on a user-configurable port. Although this app has been built with the intent to allow this to be the case, it is of course still wise to mitigate risk as much as possible. Because of this, it is recommended that the relay be installed directly on the Windows Server(s) responsible for sending mail from your application or system where possible, so that unencrypted mail is not traveling through an internal network.
 
-When this is not possible, care should be taken to ensure the network connection between the server and the relay application is as secure as possible, preferably through network isolation, and the whitelist (see AllowedSenderAddresses below) should be configured appropriately.
+When this is not possible, care should be taken to ensure the network connection between the server and the relay application is as secure as possible, preferably through network isolation, and the whitelist (see `AllowedSenderAddresses` in the configuration section below) should be configured appropriately.
 
 ## Office 365 / Azure Configuration ##
 
 > **Note**
-> This section of the README is under construction, but in short, an App Registration needs to be created in Azure Active Directory with the `Mail.Send` permission for the Microsoft Graph API. A client secret must then be created for the app registration which is then provided in the relay's configuration file as described below.
+> This section of the README is under construction, but in short, an App Registration needs to be created in Azure Active Directory with the `Mail.Send` permission for the Microsoft Graph API. A client secret must then be created for the app registration which is then provided in the relay's configuration file in the `AzureClientSecret` setting.
 
 > **Warning**
 > Although the Graph API `Mail.Send` should function properly as a user-level permission configured for the appropriate account, the app has only be tested using an Application-level permission with admin consent granted for the organization.
