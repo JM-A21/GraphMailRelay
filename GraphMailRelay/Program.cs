@@ -19,11 +19,32 @@ namespace GraphMailRelay
 					// Add the MV10 generic logger so we can log errors during configuration.
 					.AddHostBuilderLogger()
 
+					// Configure the application as a Windows Service.
+					.UseWindowsService((options) =>
+					{
+						options.ServiceName = "GraphMailRelayService";
+					})
+
 					// Configure the application with custom settings locations.
 					.ConfigureAppConfiguration((configuration) =>
 					{
 						// TODO: Add path to app's ProgramData directory and the "appsettings.json" file that will be contained within.
 						// TODO: Dynamic iteration through folders?
+#if DEBUG
+						// TODO: Make this dynamic. Ideally both application and WiX should be dynamicall fed from properties somewhere.
+						// This must match what's configured in WiX, otherwise the file path will be wrong and the settings won't load.
+						configuration.AddJsonFile(
+							Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "JM-A21", "GraphMailRelay", "appsettings.json"),
+							optional: true,
+							reloadOnChange: false);
+#else
+						// TODO: Make this dynamic. Ideally both application and WiX should be dynamicall fed from properties somewhere.
+						// This must match what's configured in WiX, otherwise the file path will be wrong and the settings won't load.
+						configuration.AddJsonFile(
+							Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "JM-A21", "GraphMailRelay", "appsettings.json"),
+							optional: false,
+							reloadOnChange: false);
+#endif
 					})
 
 					// Configure the worker services themselves and pass in needed objects.

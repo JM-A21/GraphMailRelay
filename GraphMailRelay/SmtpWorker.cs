@@ -98,8 +98,6 @@ namespace GraphMailRelay
 			// Validate AllowedSenderAddresses.
 			if (_options.AllowedSenderAddresses is not null)
 			{
-				_options.AllowedSenderAddresses.Sort();
-
 				// TODO: Reconfigure SmtpWorkerOptions to pull actual IP/DNS name objects and use those for SmtpWorkerFilter instead?
 				if (!_options.AllowedSenderAddresses.Any())
 				{
@@ -107,6 +105,8 @@ namespace GraphMailRelay
 					optionsInvalid.Add(string.Format("{0}:AllowedSenderAddresses (no allowed sender addresses provided; relay would reject all incoming mail)", SmtpWorkerOptions.SmtpConfiguration));
 					optionsValidationFailed = true;
 				}
+
+				_options.AllowedSenderAddresses.Sort();
 
 				foreach (string address in _options.AllowedSenderAddresses)
 				{
