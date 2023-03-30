@@ -3,8 +3,8 @@ A basic .NET-based background worker service for Windows intended to act as a si
 
 ## Requirements
 
-- Office 365 tenant. Only the Global and US Government L4 (aka GCC High) environments are currently supported
-- [.NET Desktop Runtime 7.x.x](https://dotnet.microsoft.com/en-us/download/dotnet/7.0)
+- Office 365 tenant. Only the Global and US Government L4 (aka GCC High) environments are currently supported.
+- [.NET Desktop Runtime 7.x](https://dotnet.microsoft.com/en-us/download/dotnet/7.0)
 
 ## Overview
 
