@@ -17,7 +17,7 @@ When this is not possible, care should be taken to ensure the network connection
 ## Office 365 / Azure Configuration ##
 
 > **Note**
-> This section of the README is under construction, but in short, an App Registration needs to be created in Azure Active Directory with the `Mail.Send` permission for the Microsoft Graph API. A client secret must then be created for the app registration which is then provided in the relay's configuration file as described below.
+> This section of the README is under construction, but in short, an App Registration needs to be created in Azure Active Directory with the `Mail.Send` permission for the Microsoft Graph API. A client secret must then be created for the app registration which is then provided in the relay's configuration file in the `AzureClientSecret` setting.
 
 > **Warning**
 > Although the Graph API `Mail.Send` should function properly as a user-level permission configured for the appropriate account, the app has only be tested using an Application-level permission with admin consent granted for the organization.
