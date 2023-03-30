@@ -29,17 +29,17 @@ When this is not possible, care should be taken to ensure the network connection
 
 The configuration file for the service is named `appsettings.json`. When built from code, it will be present in the output directory of the built executable. When installed using the provided MSI installer, it will be located in `%PROGRAMDATA%\JM-A21\GraphMailRelay`.
 
-Running the application or service without any of these settings will result in the application writing errors to the console and the Windows `Application` event log before shutting down.
+Starting the application while some of these settings are null or missing will result in the application writing errors to the console and the Windows `Application` event log before shutting down.
 
 ### appsettings.json: SmtpConfiguration
 
 This section of the file configures the SmtpServer component of the relay application. The default settings in this section are sufficient for receiving mail from a local application or service via either `localhost` or `127.0.0.1` on port `25`, but the settings may be modified per your needs as described below.
 
-- ServerName: The name the SmtpServer will run under.
+- **ServerName**: The name the SmtpServer will run under.
     - Mostly intended for use later once the relay supports receiving encrypted mail.
-- ServerPort: The port the SmtpServer will listen on. 
+- **ServerPort**: The port the SmtpServer will listen on. 
     - Note: If the relay will be receiving mail from anywhere other than the local server, ensure that your chosen port is open in Windows Firewall.
-- AllowedSenderAddresses: A list of addresses and DNS names the relay will accept mail from.
+- **AllowedSenderAddresses**: A list of addresses and/or DNS names for endpoints the relay will accept mail from.
     - Note: If the relay receives mail from an endpoint outside of this list, the relay will drop the message and write a warning to the logging system.
 
 ### appsettings.json: GraphConfiguration
@@ -48,6 +48,9 @@ This section of the file configures the Graph API client component of the relay 
 
 > **Note**
 > All GUIDs referenced below must be in format "00000000-0000-0000-0000-000000000000" (no `{}` curly braces) and are not case-sensitive.
+
+> **Note**
+> All location notes above are as of 2023-03-23 in the Office 365 Global environment and may not remain accurate in the future.
 
 - **AzureTenantId**: Tenant identifier GUID.
     - Can be found in Azure Active Directory on the "Overview" page
@@ -60,9 +63,6 @@ This section of the file configures the Graph API client component of the relay 
     - `"GraphGlobal"` for standard / commercial Office 365 tenants.
     - `"GraphUSGovL4"` for US Government L4 (also known as GCC High).
 - **HttpResponseCapture**: Whether to enable logging of Graph API response content to console. Used to diagnose request failures. May be `true` or `false`.
-
-> **Note**
-> All location notes above are as of 2023-03-23 in the Office 365 Global environment and may not remain accurate in the future.
 
 
 ## Samples
