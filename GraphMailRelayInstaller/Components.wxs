@@ -1,9 +1,19 @@
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+	 xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 	<Fragment>
-		<ComponentGroup Id="ApplicationComponents" Directory="INSTALLFOLDER">
-			<ComponentGroupRef Id="ApplicationBinaryComponents" />
-			<Component Id="GraphMailRelayService">
-				<!--<ServiceInstall Id="GraphMailRelayService"
+		<!--
+		Would prefer most of this be dynamically built directly from project output using Heat harvesting, but while ProjectHarvest or
+		DirectoryHarvest tasks in the .wixproj would enable this, there isn't an easy way I can see (short of using a .XSLT transform)
+		to inject the ServceInstall/util:ServiceConfig/ServiceControl elements into the generated component for the relay's executable.
+		
+		However, since the Publish operation in Visual Studio can be configured to pack all necessary binaries into a single executable,
+		manually configuring file handling here will work for the time being. As v4 of the WiX toolset matures, we may look at swapping
+		this back to a more dynamic setup.
+		-->
+		<ComponentGroup Id="GraphMailRelayComponents">
+			<Component Id="GraphMailRelay" Directory="INSTALLFOLDER" Guid="*">
+				<File Id="GraphMailRelay" Source="GraphMailRelay.exe" Vital="true"/>
+				<ServiceInstall Id="GraphMailRelayService"
 								Name="GraphMailRelayService"
 								DisplayName="Graph Mail Relay Service"
 								Description="A simple relay service that accepts incoming mail on a configurable port and relays it via the Microsoft Graph API."
@@ -14,11 +24,17 @@
 										ResetPeriodInDays="1"
 										RestartServiceDelayInSeconds="60" />
 				</ServiceInstall>
-				<ServiceControl Id="GraphMailRelayService" Name="GraphMailRelayService" Start="install" Stop="both" Remove="uninstall" />-->
+				
+				<!--
+				We can't have the service automatically start on install unless the installer accepts configuration parameters and
+				can place them somewhere the application can access, such as the appsettings.json file or the registry. 
+				<ServiceControl Id="GraphMailRelayService" Name="GraphMailRelayService" Start="install" Stop="both" Remove="uninstall" />
+				-->
+				<ServiceControl Id="GraphMailRelayService" Name="GraphMailRelayService" Stop="both" Remove="uninstall" />
 			</Component>
-		</ComponentGroup>
-
-		<ComponentGroup Id="ProgramDataComponents" Directory="PROGRAMDATAFOLDER">
+			<Component Directory="COMMONAPPDATAFOLDER">
+				<File Id="GraphMailRelaySettings" Source="appsettings.json" />
+			</Component>
 		</ComponentGroup>
 	</Fragment>
 </Wix>
