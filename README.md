@@ -68,7 +68,7 @@ This section of the file configures the Graph API client component of the relay 
 ## Samples
 ### appsettings.json
 
-```cs
+```json
 {
 	"Logging": {
 		"LogLevel": {
