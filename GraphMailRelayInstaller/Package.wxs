@@ -1,10 +1,28 @@
-﻿<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+﻿<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+	<!-- Configure the package properties. -->
+	<!-- TODO: Figure out how to dynamically pull name, manufacturer, and version info from source project/output files. -->
 	<Package Name="Graph Mail Relay" Manufacturer="JM-A21" Version="1.1.0.0" Compressed="true" Scope="perMachine" UpgradeCode="b2ce958a-60cb-4cd3-99da-b57165023003">
-		<MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeError)" />
-		<MediaTemplate EmbedCab="true"/>
 
+		<!-- Configure miscellaneous package options.-->
+		<MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeError)" />
+		<MediaTemplate EmbedCab="true" />
+
+		<!-- Configure top-level and components. -->
 		<Feature Id="Main">
-			<ComponentGroupRef Id="ApplicationComponents" />
+			<ComponentGroupRef Id="GraphMailRelayComponents" />
 		</Feature>
+
+		<!-- Configure a custom action to open the configuration folder installation is complete. -->
+		<Property Id="WixQuietExecCmdLine" Value='"explorer.exe" "C:\ProgramData\JM-A21\GraphMailRelay"' /> <!-- This kind of works. But doesn't go to the right path. -->
+		<CustomAction Id="CustomActionOpenCommonAppDataFolder" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixQuietExec" Execute="immediate" Impersonate="true" Return="asyncWait"/>
+
+		<!-- Configure dialog behavior. -->
+		<Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Open configuration folder" />
+		<UIRef Id="WixUI_ErrorProgressText" />
+		<UI>
+			<ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+			<Publish Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="CustomActionOpenCommonAppDataFolder" Order="1" />
+		</UI>
 	</Package>
 </Wix>
+<!--<SetProperty Id="WixQuietExecCmdLine" Value="[COMMONAPPDATAFOLDER]" After="InstallInitialize" Sequence="both" />-->
