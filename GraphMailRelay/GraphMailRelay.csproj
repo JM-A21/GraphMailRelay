@@ -1,10 +1,16 @@
-<Project Sdk="Microsoft.NET.Sdk.Worker">
+﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
 	<PropertyGroup>
 		<TargetFramework>net7.0</TargetFramework>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<UserSecretsId>dotnet-GraphMailRelay-02bed99c-92e9-44c6-a1fa-3fc0a3747108</UserSecretsId>
 		<ServerGarbageCollection>true</ServerGarbageCollection>
+		<ErrorReport>none</ErrorReport>
+		<Version>1.1.0.0</Version>
+		<Title>Graph Mail Relay</Title>
+		
+		<!-- Fix to make sure the project considers the AppHost binary part of its BuiltProjectOutputGroupOutput so that it can be captured by the WiX MSI builder.-->
+		<!--<_AddAppHostTargetPath>$([System.IO.Path]::ChangeExtension($(TargetPath), '.exe'))</_AddAppHostTargetPath>-->
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -17,5 +23,9 @@
 		<PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.4.0" />
 		<PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.0.0-rc9.14" />
 		<PackageReference Include="SmtpServer" Version="9.0.2" />
+		
+		<!-- Fix to make sure the project considers the AppHost binary part of its BuiltProjectOutputGroupOutput so that it can be captured by the WiX MSI builder.-->
+		<!--<BuiltProjectOutputGroupOutput Include="$(_AddAppHostTargetPath)" TargetPath="$(_AddAppHostTargetPath)" CopyToOutputDirectory="PreserveNewest" />-->
+		<!--<BuiltProjectOutputGroupOutput Include="%(FullPath)" Condition=" '$(AppConfig)' != '' " TargetPath="@(AppConfigFileDestination)" CopyToOutputDirectory="PreserveNewest" />-->
 	</ItemGroup>
 </Project>
