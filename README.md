@@ -50,7 +50,7 @@ This section of the file configures the Graph API client component of the relay 
 > All GUIDs referenced below must be in format "00000000-0000-0000-0000-000000000000" (no `{}` curly braces) and are not case-sensitive.
 
 > **Note**
-> All location notes above are as of 2023-03-23 in the Office 365 Global environment and may not remain accurate in the future.
+> All location notes below are as of 2023-03-23 in the Office 365 Global environment and may not remain accurate in the future.
 
 - **AzureTenantId**: Tenant identifier GUID.
     - Can be found in Azure Active Directory on the "Overview" page
