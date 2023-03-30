@@ -29,7 +29,7 @@ When this is not possible, care should be taken to ensure the network connection
 
 The configuration file for the service is named `appsettings.json`. When built from code, it will be present in the output directory of the built executable. When installed using the provided MSI installer, it will be located in `%PROGRAMDATA%\JM-A21\GraphMailRelay`.
 
-Running the application or service without any of these settings will result in the application writing errors to the console and the Windows `Application` event log before shutting down.
+Starting the application while some of these settings are null or missing will result in the application writing errors to the console and the Windows `Application` event log before shutting down.
 
 ### appsettings.json: SmtpConfiguration
 
@@ -49,6 +49,9 @@ This section of the file configures the Graph API client component of the relay 
 > **Note**
 > All GUIDs referenced below must be in format "00000000-0000-0000-0000-000000000000" (no `{}` curly braces) and are not case-sensitive.
 
+> **Note**
+> All location notes above are as of 2023-03-23 in the Office 365 Global environment and may not remain accurate in the future.
+
 - **AzureTenantId**: Tenant identifier GUID.
     - Can be found in Azure Active Directory on the "Overview" page
 - **AzureClientId**: Application (also known as Client) identifier GUID
@@ -60,9 +63,6 @@ This section of the file configures the Graph API client component of the relay 
     - `"GraphGlobal"` for standard / commercial Office 365 tenants.
     - `"GraphUSGovL4"` for US Government L4 (also known as GCC High).
 - **HttpResponseCapture**: Whether to enable logging of Graph API response content to console. Used to diagnose request failures. May be `true` or `false`.
-
-> **Note**
-> All location notes above are as of 2023-03-23 in the Office 365 Global environment and may not remain accurate in the future.
 
 
 ## Samples
