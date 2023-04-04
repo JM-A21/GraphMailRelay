@@ -1,7 +1,6 @@
 using MimeKit;
 using Org.BouncyCastle.Utilities.Net;
 using SmtpServer;
-using System.Diagnostics.Eventing.Reader;
 using System.Text;
 using System.Threading.Channels;
 
@@ -41,7 +40,7 @@ namespace GraphMailRelay
 
 		public async Task StartAsync(CancellationToken cancellationToken)
 		{
-			_logger.LogTrace(ProgramLogEvents.SmtpWorkerInitializing, "Worker is initializing.");
+			_logger.LogTrace(RelayLogEvents.SmtpWorkerStarting, "Worker is starting.");
 
 			// Create linked token to allow cancelling executing task from provided token
 			_stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -49,21 +48,39 @@ namespace GraphMailRelay
 			// Confirm provided configuration parameters are valid.
 			if (ValidateOptions())
 			{
+				// Begin setup of the SmtpServer object that will handle receiving mail.
 
-				// Initialize worker operations.
-				InitializeWorker();
+				var smtpServiceOptions = new SmtpServerOptionsBuilder()
+					.ServerName(_options.ServerName!)
+					.Port((int)_options.ServerPort!)
+					.Build();
+
+				var smtpServiceProvider = new SmtpServer.ComponentModel.ServiceProvider();
+				smtpServiceProvider.Add(new SmtpWorkerFilter(_logger, _options));
+				smtpServiceProvider.Add(new SmtpWorkerRelayStore(_logger, _queueWriter));
+
+				_smtpServer = new SmtpServer.SmtpServer(smtpServiceOptions, smtpServiceProvider);
+
+				// Start the SmtpServer.
+				_workerTask = _smtpServer.StartAsync(CancellationToken.None);
+
+				string serverWhitelist = string.Join("\r\n\t", _options.AllowedSenderAddresses!.Select(address => address));
+				string serverName = _options.ServerName!;
+				int serverPort = (int)_options.ServerPort!;
+				_logger.LogInformation(RelayLogEvents.SmtpWorkerStarted, "Worker is listening on {@serverName}:{@serverPort}.\r\nIncoming mail will be accepted from the following whitelisted endpoints:\r\n\t{@serverWhitelist}", serverName, serverPort, serverWhitelist);
 			}
 			else
 			{
-				_logger.LogTrace(ProgramLogEvents.SmtpWorkerCancelling, "Worker is cancelling execution.");
+				_logger.LogTrace(RelayLogEvents.SmtpWorkerCancelling, "Worker is cancelling execution.");
 				_stoppingCts.Cancel();
 				_applicationLifetime.StopApplication();
 			}
+			return;
 		}
 
 		private bool ValidateOptions()
 		{
-			_logger.LogTrace(ProgramLogEvents.SmtpWorkerValidating, "Worker is validating.");
+			_logger.LogTrace(RelayLogEvents.SmtpWorkerValidating, "Worker is validating.");
 
 			// Define some lists and variables we'll use later to write missing or invalid settings to the log and abort application startup.
 			List<string> optionsMissing = new();
@@ -136,7 +153,7 @@ namespace GraphMailRelay
 			// Determine if validation failed. If so, build and log error message indicating which options are missing or invalid.
 			if (!optionsValidationFailed)
 			{
-				_logger.LogTrace(ProgramLogEvents.SmtpWorkerValidated, "Worker configuration validated.");
+				_logger.LogTrace(RelayLogEvents.SmtpWorkerValidated, "Worker configuration validated.");
 			}
 			else
 			{
@@ -146,7 +163,7 @@ namespace GraphMailRelay
 				{
 					foreach (string option in optionsMissing)
 					{
-						optionsValidationFailedMessageBuilder.AppendLine("Missing: " + option);
+						optionsValidationFailedMessageBuilder.AppendLine("\tMissing: " + option);
 					}
 					if (optionsInvalid.Any()) { optionsValidationFailedMessageBuilder.AppendLine(); }
 				}
@@ -155,49 +172,22 @@ namespace GraphMailRelay
 				{
 					foreach (string option in optionsInvalid)
 					{
-						optionsValidationFailedMessageBuilder.AppendLine("Invalid: " + option);
+						optionsValidationFailedMessageBuilder.AppendLine("\tInvalid: " + option);
 					}
 				}
 
-				string optionsValidationFailedMessage = optionsValidationFailedMessageBuilder.ToString();
-
 				if (optionsValidationFailedMessageBuilder.Length > 0)
 				{
-					_logger.LogError(ProgramLogEvents.SmtpWorkerValidationFailed, "Worker validation due to the following settings errors. Please review configuration file and documentation.\r\n\r\n{@optionsValidationFailedMessage}", optionsValidationFailedMessage);
+					string optionsValidationFailedMessage = optionsValidationFailedMessageBuilder.ToString();
+					_logger.LogError(RelayLogEvents.SmtpWorkerValidationFailed, "Worker validation failed due to the following errors. Please review configuration file and documentation.\r\n{@optionsValidationFailedMessage}", optionsValidationFailedMessage);
 				}
 				else
 				{
-					_logger.LogCritical(ProgramLogEvents.SmtpWorkerValidationFailed, "Worker validation due to unhandled settings errors. Please contact the developer.");
+					_logger.LogCritical(RelayLogEvents.SmtpWorkerValidationFailedUnhandled, "Worker validation failed due to unhandled validation errors. Please contact the developer.");
 				}
 			}
 
 			return !optionsValidationFailed;
-		}
-
-		private void InitializeWorker()
-		{
-			// Begin setup of the SmtpServer object that will handle receiving mail.
-			_logger.LogTrace(ProgramLogEvents.SmtpWorkerStarting, "Worker is starting.");
-
-			var smtpServiceOptions = new SmtpServerOptionsBuilder()
-				.ServerName(_options.ServerName!)
-				.Port((int)_options.ServerPort!)
-				.Build();
-
-			var smtpServiceProvider = new SmtpServer.ComponentModel.ServiceProvider();
-			smtpServiceProvider.Add(new SmtpWorkerFilter(_logger, _options));
-			smtpServiceProvider.Add(new SmtpWorkerRelayStore(_logger, _queueWriter));
-
-			_smtpServer = new SmtpServer.SmtpServer(smtpServiceOptions, smtpServiceProvider);
-
-			// Start the SmtpServer.
-			_workerTask = _smtpServer.StartAsync(_stoppingCts!.Token);
-
-			string serverWhitelist = string.Join("\r\n\t", _options.AllowedSenderAddresses!.Select(address => address));
-			string serverName = _options.ServerName!;
-			int serverPort = (int)_options.ServerPort!;
-			_logger.LogInformation(ProgramLogEvents.SmtpWorkerStarted, "Worker is listening on {@serverName}:{@serverPort}.\r\nIncoming mail will be accepted from the following whitelisted endpoints:\r\n\t{@serverWhitelist}", serverName, serverPort, serverWhitelist);
-			return;
 		}
 
 		public async Task StopAsync(CancellationToken cancellationToken)
@@ -212,6 +202,9 @@ namespace GraphMailRelay
 			{
 				// Signal cancellation to the executing method
 				_stoppingCts!.Cancel();
+
+				// Stop the SMTP relay.
+				_smtpServer!.Shutdown();
 			}
 			finally
 			{

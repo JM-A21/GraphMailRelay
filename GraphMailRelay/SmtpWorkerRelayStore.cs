@@ -1,5 +1,6 @@
 ﻿using MimeKit;
 using SmtpServer;
+using SmtpServer.Mail;
 using SmtpServer.Net;
 using SmtpServer.Protocol;
 using SmtpServer.Storage;
@@ -11,6 +12,10 @@ namespace GraphMailRelay
 {
 	internal class SmtpWorkerRelayStore : MessageStore
 	{
+		private const string logTraceMessageSaving = "Saving new message to relay store.";
+		private const string logDebugMessageQueuing = "Queuing new message.";
+		private const string logDebugMessageQueued = "Queued new message.";
+
 		private readonly ILogger<SmtpWorker> _logger;
 		private readonly ChannelWriter<KeyValuePair<Guid, MimeMessage>> _queueWriter;
 
@@ -22,30 +27,46 @@ namespace GraphMailRelay
 
 		public override Task<SmtpResponse> SaveAsync(ISessionContext context, IMessageTransaction transaction, ReadOnlySequence<byte> buffer, CancellationToken cancellationToken)
 		{
-			// Build message from data buffer.
-			var bufferPosition = buffer.GetPosition(0);
-			var messageStream = new MemoryStream();
-
-			while (buffer.TryGet(ref bufferPosition, out var memory)) { messageStream.Write(memory.Span); }
-
-			messageStream.Position = 0;
-
-			// Build a new MimeKit message object from the data stream.
-			MimeMessage message = MimeMessage.Load(messageStream, cancellationToken);
-
 			// Generate an identifier for this message which will be utilized for tracing message flow through the relay.
-			Guid messageIdentifier = Guid.NewGuid();
+			Guid messageId = Guid.NewGuid();
 
-			// Write a log entry indicating that we're queuing this message for the GraphWorker.
-			string componentName = GetType().Name;
-			string endpointAddress = ((IPEndPoint)context.Properties[EndpointListener.RemoteEndPointKey]).Address.ToString();
-			_logger.LogDebug("{@componentName} is queueing message '{@messageIdentifier}' received from {@endpointAddress}", componentName, messageIdentifier, endpointAddress);
+			// Begin logging activities.
+			using (_logger.BeginScope(new Dictionary<string, object>
+			{
+				{ "SenderIP", ((IPEndPoint)context.Properties[EndpointListener.RemoteEndPointKey]).Address.ToString() },
+				{ "From", transaction.From.AsAddress() },
+				{ "MessageId" , messageId.ToString() }
+			}))
+			{
+				_logger.LogTrace(RelayLogEvents.SmtpWorkerMessageSaving, logTraceMessageSaving);
 
-			// Write the message to the relay's queue channel which will later be picked up by the GraphWorker.
-			_queueWriter.WriteAsync(new KeyValuePair<Guid, MimeMessage>(messageIdentifier, message));
+				// Build message from data buffer.
+				var bufferPosition = buffer.GetPosition(0);
+				var messageStream = new MemoryStream();
 
-			// Return a new task indicating that the "save" operation was successful.
-			return Task.FromResult(SmtpResponse.Ok);
+				while (buffer.TryGet(ref bufferPosition, out var memory)) { messageStream.Write(memory.Span); }
+
+				messageStream.Position = 0;
+
+				// Build a new MimeKit message object from the data stream.
+				MimeMessage message = MimeMessage.Load(messageStream, cancellationToken);
+
+				using (_logger.BeginScope(new Dictionary<string, object>
+				{
+					{ "Recipients", string.Join(", ", message.To) }
+				}))
+				{
+					_logger.LogDebug(RelayLogEvents.SmtpWorkerMessageQueuing, logDebugMessageQueuing);
+
+					// Write the message to the relay's queue channel which will later be picked up by the GraphWorker.
+					_queueWriter.WriteAsync(new KeyValuePair<Guid, MimeMessage>(messageId, message));
+
+					_logger.LogDebug(RelayLogEvents.SmtpWorkerMessageQueued, logDebugMessageQueued);
+
+					// Return a new task indicating that the "save" operation was successful.
+					return Task.FromResult(SmtpResponse.Ok);
+				}
+			}
 		}
 	}
 }

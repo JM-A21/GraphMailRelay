@@ -1,7 +1,7 @@
 ﻿<Project Sdk="WixToolset.Sdk/4.0.0-rc.4">
   <ItemGroup>
     <ProjectReference Include="..\GraphMailRelay\GraphMailRelay.csproj" />
-    <BindPath Include="..\GraphMailRelay\bin\Release\net7.0\publish" />
+    <BindPath Include="..\GraphMailRelay\bin\Release\net7.0-windows\publish" />
     <BindVariable Include="WixUILicenseRtf=..\LICENSE.rtf" />
   </ItemGroup>
   <ItemGroup>

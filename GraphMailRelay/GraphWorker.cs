@@ -11,6 +11,19 @@ namespace GraphMailRelay
 {
 	internal class GraphWorker : IHostedService, IDisposable
 	{
+		private const string logTraceMessageDequeued = "Message received from relay queue.";
+		private const string logTraceRequestBuildStarted = "Building Graph API request.";
+		private const string logTraceRequestBuildFinished = "Finished building Graph API request.";
+
+		private const string logDebugRequestSending = "Sending Graph API request.";
+
+		private const string logInfoRequestComplete = "Successfully completed Graph API request.";
+
+		private const string logWarningRequestCanceled = "Dropped relay message due to unexpected Graph API request cancellation.";
+
+		private const string logErrorRequestFaulted = "Dropped relay message due to unexpected Graph API request fault. Please contact the developer.";
+		private const string logErrorUnknown = "Worker caught exception during Graph API request processing.";
+
 		private CancellationTokenSource? _stoppingCts;
 		private Task? _workerTask;
 		private bool disposedValue;
@@ -53,14 +66,127 @@ namespace GraphMailRelay
 
 		public async Task StartAsync(CancellationToken cancellationToken)
 		{
+			_logger.LogTrace(RelayLogEvents.GraphWorkerStarting, "Worker is starting.");
+
 			// Create linked token to allow cancelling executing task from provided token
 			_stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
 			// Confirm provided configuration parameters are valid.
-			ValidateOptions();
+			if (ValidateOptions())
+			{
+				Uri azureAuthorityHost;
+				Uri graphBaseUri;
 
-			// Initialize worker operations.
-			InitializeWorker();
+				switch (_options.EnvironmentName)
+				{
+					case "GraphGlobal":
+						azureAuthorityHost = AzureAuthorityHosts.AzurePublicCloud;
+						graphBaseUri = new("https://graph.microsoft.com/v1.0");
+						break;
+
+					case "GraphUSGovL4":
+						azureAuthorityHost = AzureAuthorityHosts.AzureGovernment;
+						graphBaseUri = new("https://graph.microsoft.us/v1.0");
+						break;
+
+					default:
+						throw new InvalidOperationException("Unsupported Graph environment name.");
+				}
+
+				var azureHandlers = GraphClientFactory.CreateDefaultHandlers();
+				var azureCredentials = new ClientSecretCredential(
+					tenantId: _options.AzureTenantId,
+					clientId: _options.AzureClientId,
+					clientSecret: _options.AzureClientSecret,
+					options: new TokenCredentialOptions
+					{
+						AuthorityHost = azureAuthorityHost
+					});
+
+				var azureHttpClient = GraphClientFactory.Create(azureHandlers);
+				var azureAuthProvider = new AzureIdentityAuthenticationProvider(azureCredentials);
+				_graphServiceClient = new GraphServiceClient(azureHttpClient, azureAuthProvider, graphBaseUri.ToString());
+
+				// TODO: Validate that provide AzureMailUser exists and is valid so relay doesn't choke when trying to send real messages after startup.
+
+				// Create a new task representing the primary long-running operation for this worker.
+				_workerTask = Task.Factory.StartNew(async () =>
+				{
+					while (!_stoppingCts!.IsCancellationRequested | !_queueReaderCompletionTask.IsCompleted | await _queueReader.WaitToReadAsync())
+					{
+						while (_queueReader.TryRead(out KeyValuePair<Guid, MimeMessage> queueItem))
+						{
+							Guid messageId = queueItem.Key;
+							MimeMessage message = queueItem.Value;
+
+							using (_logger.BeginScope(new Dictionary<string, object>
+							{
+								{ "MessageId" , messageId.ToString() },
+								{ "From", message.From },
+								{ "Recipients", string.Join(", ", message.To) }
+							}))
+							{
+								_logger.LogTrace(RelayLogEvents.GraphWorkerMessageDequeued, logTraceMessageDequeued);
+								using var mimeStream = new MemoryStream();
+								message.WriteTo(mimeStream);
+								mimeStream.Position = 0;
+
+								_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildStarted, logTraceRequestBuildStarted);
+								var graphMailRequest = _graphServiceClient
+									.Users[_options.AzureMailUser]
+									.SendMail
+									.ToPostRequestInformation(
+										new Microsoft.Graph.Users.Item.SendMail.SendMailPostRequestBody()
+									);
+
+								// This shouldn't be necessary, but since I'm not sure how to strip off the original content-type
+								// header using the SDK itself, just manually remove it and add the proper one for now as a workaround.
+								// TODO: Determine how to make this adjustment via the SDK itself.
+								graphMailRequest.Headers.Remove("Content-Type");
+								graphMailRequest.Headers.Add("Content-Type", "text/plain");
+
+								graphMailRequest.HttpMethod = Microsoft.Kiota.Abstractions.Method.POST;
+								graphMailRequest.Content = new StringContent(Convert.ToBase64String(mimeStream.ToArray()), Encoding.UTF8, "text/plain").ReadAsStream();
+
+								try
+								{
+									_logger.LogDebug(RelayLogEvents.GraphWorkerRequestSending, logDebugRequestSending);
+									Task<MessageCollectionResponse?> requestTask = _graphServiceClient.RequestAdapter.SendAsync<MessageCollectionResponse>(graphMailRequest, MessageCollectionResponse.CreateFromDiscriminatorValue);
+									requestTask.Wait();
+
+									switch (requestTask.Status)
+									{
+										case System.Threading.Tasks.TaskStatus.RanToCompletion:
+											_logger.LogInformation(RelayLogEvents.GraphWorkerRequestComplete, logInfoRequestComplete);
+											break;
+
+										case System.Threading.Tasks.TaskStatus.Canceled:
+											_logger.LogWarning(RelayLogEvents.GraphWorkerRequestCanceled, logWarningRequestCanceled);
+											break;
+
+										case System.Threading.Tasks.TaskStatus.Faulted:
+											_logger.LogError(RelayLogEvents.GraphWorkerRequestFaulted, logErrorRequestFaulted);
+											break;
+									}
+								}
+								catch (Exception ex)
+								{
+									_logger.LogError(RelayLogEvents.GraphWorkerUnknownError, ex, logErrorUnknown);
+								}
+							}
+
+						}
+					}
+				}, _stoppingCts!.Token);
+
+				_logger.LogInformation(RelayLogEvents.GraphWorkerStarted, "Worker has started.");
+			}
+			else
+			{
+				_logger.LogTrace(RelayLogEvents.GraphWorkerCancelling, "Worker is cancelling execution.");
+				_stoppingCts.Cancel();
+				_applicationLifetime.StopApplication();
+			}
 		}
 
 		private bool ValidateOptions()
@@ -154,7 +280,7 @@ namespace GraphMailRelay
 				{
 					foreach (string option in optionsMissing)
 					{
-						optionsValidationFailedMessageBuilder.AppendLine("Missing: " + option);
+						optionsValidationFailedMessageBuilder.AppendLine("\tMissing: " + option);
 					}
 					if (optionsInvalid.Any()) { optionsValidationFailedMessageBuilder.AppendLine(); }
 				}
@@ -163,135 +289,22 @@ namespace GraphMailRelay
 				{
 					foreach (string option in optionsInvalid)
 					{
-						optionsValidationFailedMessageBuilder.AppendLine("Invalid: " + option);
+						optionsValidationFailedMessageBuilder.AppendLine("\tInvalid: " + option);
 					}
 				}
-
-				string optionsValidationFailedMessage = optionsValidationFailedMessageBuilder.ToString();
 
 				if (optionsValidationFailedMessageBuilder.Length > 0)
 				{
-					_logger.LogError("Failed to initialize {@componentName} due to the following settings validation errors. Please review configuration file and documentation.\r\n\r\n{@optionsValidationFailedMessage}", componentName, optionsValidationFailedMessage);
+					string optionsValidationFailedMessage = optionsValidationFailedMessageBuilder.ToString();
+					_logger.LogError(RelayLogEvents.GraphWorkerValidationFailed, "Worker validation failed due to the following errors. Please review configuration file and documentation.\r\n{@optionsValidationFailedMessage}", optionsValidationFailedMessage);
 				}
 				else
 				{
-					_logger.LogCritical("Failed to initialize {@componentName} due to unhandled settings validation errors. Please contact the developer.", componentName);
+					_logger.LogCritical(RelayLogEvents.GraphWorkerValidationFailedUnhandled, "Worker validation failed due to unhandled validation errors. Please contact the developer.");
 				}
-				_applicationLifetime.StopApplication();
 			}
 
 			return !optionsValidationFailed;
-		}
-
-		private void InitializeWorker()
-		{
-			// Get the name of this worker class.
-			string componentName = GetType().Name;
-
-			// Begin setup of our Azure and Graph objects.
-			_logger.LogDebug("Initializing {@componentName}...", componentName);
-
-			Uri azureAuthorityHost;
-			Uri graphBaseUri;
-
-			switch (_options.EnvironmentName)
-			{
-				case "GraphGlobal":
-					azureAuthorityHost = AzureAuthorityHosts.AzurePublicCloud;
-					graphBaseUri = new("https://graph.microsoft.com/v1.0");
-					break;
-
-				case "GraphUSGovL4":
-					azureAuthorityHost = AzureAuthorityHosts.AzureGovernment;
-					graphBaseUri = new("https://graph.microsoft.us/v1.0");
-					break;
-
-				default:
-					throw new InvalidOperationException(string.Format("Unsupported Graph environment name."));
-			}
-
-			var azureHandlers = GraphClientFactory.CreateDefaultHandlers();
-			var azureCredentials = new ClientSecretCredential(
-				tenantId: _options.AzureTenantId,
-				clientId: _options.AzureClientId,
-				clientSecret: _options.AzureClientSecret,
-				options: new TokenCredentialOptions
-				{
-					AuthorityHost = azureAuthorityHost
-				});
-
-			var azureHttpClient = GraphClientFactory.Create(azureHandlers);
-			var azureAuthProvider = new AzureIdentityAuthenticationProvider(azureCredentials);
-			_graphServiceClient = new GraphServiceClient(azureHttpClient, azureAuthProvider, graphBaseUri.ToString());
-
-			// TODO: Validate that provide AzureMailUser exists and is valid so relay doesn't choke when trying to send real messages after startup.
-
-			// Create a new task representing the primary long-running operation for this worker.
-			_workerTask = Task.Factory.StartNew(async () =>
-			{
-				while (!_stoppingCts!.IsCancellationRequested | !_queueReaderCompletionTask.IsCompleted | await _queueReader.WaitToReadAsync())
-				{
-					while (_queueReader.TryRead(out KeyValuePair<Guid, MimeMessage> queueItem))
-					{
-						Guid messageId = queueItem.Key;
-						MimeMessage message = queueItem.Value;
-
-						using var mimeStream = new MemoryStream();
-						message.WriteTo(mimeStream);
-						mimeStream.Position = 0;
-
-						var graphMailRequest = _graphServiceClient
-							.Users[_options.AzureMailUser]
-							.SendMail
-							.ToPostRequestInformation(
-								new Microsoft.Graph.Users.Item.SendMail.SendMailPostRequestBody()
-							);
-
-						// This shouldn't be necessary, but since I'm not sure how to strip off the original content-type
-						// header using the SDK itself, just manually remove it and add the proper one for now as a workaround.
-						// TODO: Determine how to make this adjustment via the SDK itself.
-						graphMailRequest.Headers.Remove("Content-Type");
-						graphMailRequest.Headers.Add("Content-Type", "text/plain");
-
-						graphMailRequest.HttpMethod = Microsoft.Kiota.Abstractions.Method.POST;
-						graphMailRequest.Content = new StringContent(Convert.ToBase64String(mimeStream.ToArray()), Encoding.UTF8, "text/plain").ReadAsStream();
-
-						try
-						{
-							string messageIdString = messageId.ToString();
-							string messageToString = string.Join(", ", message.To);
-
-							_logger.LogDebug("{@componentName} is attempting to send message '{@messageId}' to recipient(s) '{@messageToString}'", componentName, messageIdString, messageToString);
-							Task<MessageCollectionResponse?> requestTask = _graphServiceClient.RequestAdapter.SendAsync<MessageCollectionResponse>(graphMailRequest, MessageCollectionResponse.CreateFromDiscriminatorValue);
-							requestTask.Wait();
-
-							switch (requestTask.Status)
-							{
-								case System.Threading.Tasks.TaskStatus.RanToCompletion:
-									_logger.LogInformation("{@componentName} successfully sent message '{@messageId}' to recipient(s) '{@messageToString}'", componentName, messageIdString, messageToString);
-									break;
-
-								case System.Threading.Tasks.TaskStatus.Canceled:
-									_logger.LogWarning("{@componentName} has dropped '{@messageId}' to recipient(s) '{@messageToString}' due to task cancellation.", componentName, messageIdString, messageToString);
-									break;
-
-								case System.Threading.Tasks.TaskStatus.Faulted:
-									_logger.LogError("{@componentName} has dropped '{@messageId}' to recipient(s) '{@messageToString}' due to unexpected task fault. Please review logs and contact the developer.", componentName, messageIdString, messageToString);
-									break;
-							}
-						}
-						catch (Exception ex)
-						{
-							// TODO: Fix this somehow.
-							_logger.LogCritical(ex, null);
-						}
-
-					}
-				}
-			}, _stoppingCts!.Token);
-
-			_logger.LogInformation("Initialized {@componentName}.", componentName);
-			return;
 		}
 
 		public async Task StopAsync(CancellationToken cancellationToken)

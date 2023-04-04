@@ -4,7 +4,6 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
         "environmentVariables": {
-            "DOTNET_ENVIRONMENT": "Development",
             "DOTNET_CLI_TELEMETRY_OPTOUT": "true"
         }
     }
