@@ -66,7 +66,7 @@ namespace GraphMailRelay
 		private bool ValidateOptions()
 		{
 			// Get the name of this worker class.
-			string workerName = GetType().Name;
+			string componentName = GetType().Name;
 
 			// Define some lists and variables we'll use later to write missing or invalid settings to the log and abort application startup.
 			List<string> optionsMissing = new();
@@ -171,11 +171,11 @@ namespace GraphMailRelay
 
 				if (optionsValidationFailedMessageBuilder.Length > 0)
 				{
-					_logger.LogError("Failed to initialize {@workerName} due to the following settings validation errors. Please review configuration file and documentation.\r\n\r\n{@optionsValidationFailedMessage}", workerName, optionsValidationFailedMessage);
+					_logger.LogError("Failed to initialize {@componentName} due to the following settings validation errors. Please review configuration file and documentation.\r\n\r\n{@optionsValidationFailedMessage}", componentName, optionsValidationFailedMessage);
 				}
 				else
 				{
-					_logger.LogCritical("Failed to initialize {@workerName} due to unhandled settings validation errors. Please contact the developer.", workerName);
+					_logger.LogCritical("Failed to initialize {@componentName} due to unhandled settings validation errors. Please contact the developer.", componentName);
 				}
 				_applicationLifetime.StopApplication();
 			}
@@ -186,10 +186,10 @@ namespace GraphMailRelay
 		private void InitializeWorker()
 		{
 			// Get the name of this worker class.
-			string workerName = GetType().Name;
+			string componentName = GetType().Name;
 
 			// Begin setup of our Azure and Graph objects.
-			_logger.LogDebug("Initializing {@workerName}...", workerName);
+			_logger.LogDebug("Initializing {@componentName}...", componentName);
 
 			Uri azureAuthorityHost;
 			Uri graphBaseUri;
@@ -261,22 +261,22 @@ namespace GraphMailRelay
 							string messageIdString = messageId.ToString();
 							string messageToString = string.Join(", ", message.To);
 
-							_logger.LogDebug("{@workerName} is attempting to send message '{@messageId}' to recipient(s) '{@messageToString}'", workerName, messageIdString, messageToString);
+							_logger.LogDebug("{@componentName} is attempting to send message '{@messageId}' to recipient(s) '{@messageToString}'", componentName, messageIdString, messageToString);
 							Task<MessageCollectionResponse?> requestTask = _graphServiceClient.RequestAdapter.SendAsync<MessageCollectionResponse>(graphMailRequest, MessageCollectionResponse.CreateFromDiscriminatorValue);
 							requestTask.Wait();
 
 							switch (requestTask.Status)
 							{
 								case System.Threading.Tasks.TaskStatus.RanToCompletion:
-									_logger.LogInformation("{@workerName} successfully sent message '{@messageId}' to recipient(s) '{@messageToString}'", workerName, messageIdString, messageToString);
+									_logger.LogInformation("{@componentName} successfully sent message '{@messageId}' to recipient(s) '{@messageToString}'", componentName, messageIdString, messageToString);
 									break;
 
 								case System.Threading.Tasks.TaskStatus.Canceled:
-									_logger.LogWarning("{@workerName} has dropped '{@messageId}' to recipient(s) '{@messageToString}' due to task cancellation.", workerName, messageIdString, messageToString);
+									_logger.LogWarning("{@componentName} has dropped '{@messageId}' to recipient(s) '{@messageToString}' due to task cancellation.", componentName, messageIdString, messageToString);
 									break;
 
 								case System.Threading.Tasks.TaskStatus.Faulted:
-									_logger.LogError("{@workerName} has dropped '{@messageId}' to recipient(s) '{@messageToString}' due to unexpected task fault. Please review logs and contact the developer.", workerName, messageIdString, messageToString);
+									_logger.LogError("{@componentName} has dropped '{@messageId}' to recipient(s) '{@messageToString}' due to unexpected task fault. Please review logs and contact the developer.", componentName, messageIdString, messageToString);
 									break;
 							}
 						}
@@ -290,7 +290,7 @@ namespace GraphMailRelay
 				}
 			}, _stoppingCts!.Token);
 
-			_logger.LogInformation("Initialized {@workerName}.", workerName);
+			_logger.LogInformation("Initialized {@componentName}.", componentName);
 			return;
 		}
 

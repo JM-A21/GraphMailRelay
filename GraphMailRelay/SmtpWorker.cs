@@ -1,6 +1,7 @@
 using MimeKit;
 using Org.BouncyCastle.Utilities.Net;
 using SmtpServer;
+using System.Diagnostics.Eventing.Reader;
 using System.Text;
 using System.Threading.Channels;
 
@@ -40,20 +41,29 @@ namespace GraphMailRelay
 
 		public async Task StartAsync(CancellationToken cancellationToken)
 		{
+			_logger.LogTrace(ProgramLogEvents.SmtpWorkerInitializing, "Worker is initializing.");
+
 			// Create linked token to allow cancelling executing task from provided token
 			_stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
 			// Confirm provided configuration parameters are valid.
-			ValidateOptions();
+			if (ValidateOptions())
+			{
 
-			// Initialize worker operations.
-			InitializeWorker();
+				// Initialize worker operations.
+				InitializeWorker();
+			}
+			else
+			{
+				_logger.LogTrace(ProgramLogEvents.SmtpWorkerCancelling, "Worker is cancelling execution.");
+				_stoppingCts.Cancel();
+				_applicationLifetime.StopApplication();
+			}
 		}
 
 		private bool ValidateOptions()
 		{
-			// Get the name of this worker class.
-			string workerName = GetType().Name;
+			_logger.LogTrace(ProgramLogEvents.SmtpWorkerValidating, "Worker is validating.");
 
 			// Define some lists and variables we'll use later to write missing or invalid settings to the log and abort application startup.
 			List<string> optionsMissing = new();
@@ -124,7 +134,11 @@ namespace GraphMailRelay
 			}
 
 			// Determine if validation failed. If so, build and log error message indicating which options are missing or invalid.
-			if (optionsValidationFailed)
+			if (!optionsValidationFailed)
+			{
+				_logger.LogTrace(ProgramLogEvents.SmtpWorkerValidated, "Worker configuration validated.");
+			}
+			else
 			{
 				StringBuilder optionsValidationFailedMessageBuilder = new();
 
@@ -149,14 +163,12 @@ namespace GraphMailRelay
 
 				if (optionsValidationFailedMessageBuilder.Length > 0)
 				{
-					_logger.LogError("Failed to initialize {@workerName} due to the following settings validation errors. Please review configuration file and documentation.\r\n\r\n{@optionsValidationFailedMessage}", workerName, optionsValidationFailedMessage);
+					_logger.LogError(ProgramLogEvents.SmtpWorkerValidationFailed, "Worker validation due to the following settings errors. Please review configuration file and documentation.\r\n\r\n{@optionsValidationFailedMessage}", optionsValidationFailedMessage);
 				}
 				else
 				{
-					_logger.LogCritical("Failed to initialize {@workerName} due to unhandled settings validation errors. Please contact the developer.", workerName);
+					_logger.LogCritical(ProgramLogEvents.SmtpWorkerValidationFailed, "Worker validation due to unhandled settings errors. Please contact the developer.");
 				}
-				_applicationLifetime.StopApplication();
-
 			}
 
 			return !optionsValidationFailed;
@@ -164,11 +176,8 @@ namespace GraphMailRelay
 
 		private void InitializeWorker()
 		{
-			// Get the name of this worker class.
-			string workerName = GetType().Name;
-
 			// Begin setup of the SmtpServer object that will handle receiving mail.
-			_logger.LogDebug("Initializing {@workerName}...", workerName);
+			_logger.LogTrace(ProgramLogEvents.SmtpWorkerStarting, "Worker is starting.");
 
 			var smtpServiceOptions = new SmtpServerOptionsBuilder()
 				.ServerName(_options.ServerName!)
@@ -177,17 +186,17 @@ namespace GraphMailRelay
 
 			var smtpServiceProvider = new SmtpServer.ComponentModel.ServiceProvider();
 			smtpServiceProvider.Add(new SmtpWorkerFilter(_logger, _options));
-			smtpServiceProvider.Add(new SmtpWorkerRelayStore(_queueWriter));
+			smtpServiceProvider.Add(new SmtpWorkerRelayStore(_logger, _queueWriter));
 
 			_smtpServer = new SmtpServer.SmtpServer(smtpServiceOptions, smtpServiceProvider);
 
 			// Start the SmtpServer.
 			_workerTask = _smtpServer.StartAsync(_stoppingCts!.Token);
 
-			string serverWhitelist = string.Join(", ", _options.AllowedSenderAddresses!.Select(address => address));
+			string serverWhitelist = string.Join("\r\n\t", _options.AllowedSenderAddresses!.Select(address => address));
 			string serverName = _options.ServerName!;
 			int serverPort = (int)_options.ServerPort!;
-			_logger.LogInformation("Initialized {@workerName} listening on {@serverName}:{@serverPort}; incoming mail will be accepted from the following whitelisted endpoints: {@serverWhitelist}.", workerName, serverName, serverPort, serverWhitelist);
+			_logger.LogInformation(ProgramLogEvents.SmtpWorkerStarted, "Worker is listening on {@serverName}:{@serverPort}.\r\nIncoming mail will be accepted from the following whitelisted endpoints:\r\n\t{@serverWhitelist}", serverName, serverPort, serverWhitelist);
 			return;
 		}
 
