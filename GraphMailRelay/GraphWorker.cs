@@ -13,6 +13,7 @@ namespace GraphMailRelay
 	{
 		private const string logTraceMessageDequeued = "Message received from relay queue.";
 		private const string logTraceRequestBuildStarted = "Building Graph API request.";
+		private const string logTraceRequestBuildFromOverridden = "Overriding 'from' address per application configuration.";
 		private const string logTraceRequestBuildFinished = "Finished building Graph API request.";
 
 		private const string logDebugRequestSending = "Sending Graph API request.";
@@ -121,12 +122,22 @@ namespace GraphMailRelay
 
 							using (_logger.BeginScope(new Dictionary<string, object>
 							{
-								{ "MessageId" , messageId.ToString() },
+								{ "MessageId", messageId.ToString() },
 								{ "From", message.From },
 								{ "Recipients", string.Join(", ", message.To) }
 							}))
 							{
 								_logger.LogTrace(RelayLogEvents.GraphWorkerMessageDequeued, logTraceMessageDequeued);
+
+								if (_options.FromAddressOverride is not null)
+								{
+									_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildFromOverridden, logTraceRequestBuildFromOverridden);
+									_ = InternetAddress.TryParse(_options.FromAddressOverride, out InternetAddress fromAddress);
+
+									message.From.Clear();
+									message.From.Add(fromAddress);
+								}
+
 								using var mimeStream = new MemoryStream();
 								message.WriteTo(mimeStream);
 								mimeStream.Position = 0;
@@ -147,6 +158,8 @@ namespace GraphMailRelay
 
 								graphMailRequest.HttpMethod = Microsoft.Kiota.Abstractions.Method.POST;
 								graphMailRequest.Content = new StringContent(Convert.ToBase64String(mimeStream.ToArray()), Encoding.UTF8, "text/plain").ReadAsStream();
+
+								_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildFinished, logTraceRequestBuildFinished);
 
 								try
 								{
@@ -174,7 +187,6 @@ namespace GraphMailRelay
 									_logger.LogError(RelayLogEvents.GraphWorkerUnknownError, ex, logErrorUnknown);
 								}
 							}
-
 						}
 					}
 				}, _stoppingCts!.Token);
@@ -191,9 +203,6 @@ namespace GraphMailRelay
 
 		private bool ValidateOptions()
 		{
-			// Get the name of this worker class.
-			string componentName = GetType().Name;
-
 			// Define some lists and variables we'll use later to write missing or invalid settings to the log and abort application startup.
 			List<string> optionsMissing = new();
 			List<string> optionsInvalid = new();
@@ -268,6 +277,13 @@ namespace GraphMailRelay
 			else
 			{
 				optionsMissing.Add(string.Format("{0}:EnvironmentName", GraphWorkerOptions.GraphConfiguration));
+				optionsValidationFailed = true;
+			}
+
+			// This may be null, in which case it won't be used. Only verify its a valid email address.
+			if (!MailAddress.TryCreate(_options.AzureMailUser, out _))
+			{
+				optionsInvalid.Add(string.Format("{0}:AzureTenantId ('{1}' is not a valid email address)", GraphWorkerOptions.GraphConfiguration, _options.AzureMailUser));
 				optionsValidationFailed = true;
 			}
 

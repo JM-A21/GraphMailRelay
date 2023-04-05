@@ -9,7 +9,7 @@
 		public string? AzureClientSecret { get; set; }
 		public string? AzureMailUser { get; set; }
 		public string? EnvironmentName { get; set; }
-
+		public string? FromAddressOverride { get; set; }
 		public bool? HttpResponseCapture { get; set; }
 	}
 }

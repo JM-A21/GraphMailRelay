@@ -41,9 +41,10 @@
 
 		internal static EventId GraphWorkerMessageDequeued = new(3100);
 		internal static EventId GraphWorkerRequestBuildStarted = new(3101);
-		internal static EventId GraphWorkerRequestBuildFinished = new(3102);
-		internal static EventId GraphWorkerRequestSending = new(3103);
-		internal static EventId GraphWorkerRequestComplete = new(3104);
+		internal static EventId GraphWorkerRequestBuildFromOverridden = new(3102);
+		internal static EventId GraphWorkerRequestBuildFinished = new(3103);
+		internal static EventId GraphWorkerRequestSending = new(3104);
+		internal static EventId GraphWorkerRequestComplete = new(3105);
 
 		internal static EventId GraphWorkerRequestCanceled = new(3900);
 		internal static EventId GraphWorkerRequestFaulted = new(3901);
