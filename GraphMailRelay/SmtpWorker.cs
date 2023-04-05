@@ -71,11 +71,9 @@ namespace GraphMailRelay
 			}
 			else
 			{
-				_logger.LogTrace(RelayLogEvents.SmtpWorkerCancelling, "Worker is cancelling execution.");
-				_stoppingCts.Cancel();
+				_logger.LogWarning(RelayLogEvents.SmtpWorkerCancelling, "Worker is requesting application halt.");
 				_applicationLifetime.StopApplication();
 			}
-			return;
 		}
 
 		private bool ValidateOptions()

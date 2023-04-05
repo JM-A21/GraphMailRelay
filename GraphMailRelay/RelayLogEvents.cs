@@ -41,13 +41,19 @@
 
 		internal static EventId GraphWorkerMessageDequeued = new(3100);
 		internal static EventId GraphWorkerRequestBuildStarted = new(3101);
-		internal static EventId GraphWorkerRequestBuildFromOverridden = new(3102);
-		internal static EventId GraphWorkerRequestBuildFinished = new(3103);
-		internal static EventId GraphWorkerRequestSending = new(3104);
-		internal static EventId GraphWorkerRequestComplete = new(3105);
+		internal static EventId GraphWorkerRequestBuildFromOverrideStarted = new(3102);
+		internal static EventId GraphWorkerRequestBuildFromOverrideParsed = new(3103);
+		internal static EventId GraphWorkerRequestBuildFromOverrideParsingFailed = new(3904);
+		internal static EventId GraphWorkerRequestBuildFromOverrideRequired = new(3105);
+		internal static EventId GraphWorkerRequestBuildFromOverrideSkipped = new(3106);
+		internal static EventId GraphWorkerRequestBuildFromOverrideComplete = new(3107);
+		internal static EventId GraphWorkerRequestBuildFailedMultipleFromAddresses = new(3908);
+		internal static EventId GraphWorkerRequestBuildFinished = new(3109);
+		internal static EventId GraphWorkerRequestSending = new(3110);
+		internal static EventId GraphWorkerRequestComplete = new(3111);
 
-		internal static EventId GraphWorkerRequestCanceled = new(3900);
-		internal static EventId GraphWorkerRequestFaulted = new(3901);
+		internal static EventId GraphWorkerRequestTaskCanceled = new(3997);
+		internal static EventId GraphWorkerRequestTaskFaulted = new(3998);
 		internal static EventId GraphWorkerUnknownError = new(3999);
 	}
 }
