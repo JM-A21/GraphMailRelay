@@ -130,8 +130,8 @@ namespace GraphMailRelay
 							{
 								{ "MessageId", messageId.ToString() },
 								{ "Sender", message.Sender },
-								{ "From", string.Join(", ", message.From) },
-								{ "Recipients", string.Join(", ", message.To) }
+								{ "From", message.From },
+								{ "Recipients", message.To }
 							}))
 							{
 								_logger.LogTrace(RelayLogEvents.GraphWorkerMessageDequeued, logTraceMessageDequeued);
