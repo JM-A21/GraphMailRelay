@@ -13,13 +13,19 @@ namespace GraphMailRelay
 	{
 		private const string logTraceMessageDequeued = "Message received from relay queue.";
 		private const string logTraceRequestBuildStarted = "Building Graph API request.";
-		private const string logTraceRequestBuildFromOverridden = "Overriding 'from' address per application configuration.";
+		private const string logTraceRequestBuildFromOverrideStarted = "Starting 'From' address override per application configuration.";
+		private const string logTraceRequestBuildFromOverrideParsed = "Parsed 'From' sender address.";
+		private const string logTraceRequestBuildFromOverrideRequired = "Message 'From' address does not match override address. Sender address will be overridden.";
+		private const string logTraceRequestBuildFromOverrideSkipped = "Message 'From' address matches override address. No action is required, skipping override.";
+		private const string logTraceRequestBuildFromOverrideComplete = "Overriding 'From' address per application configuration.";
 		private const string logTraceRequestBuildFinished = "Finished building Graph API request.";
 
 		private const string logDebugRequestSending = "Sending Graph API request.";
 
 		private const string logInfoRequestComplete = "Successfully completed Graph API request.";
 
+		private const string logWarningRequestBuildFailedMultipleFromAddresses = "Dropped relay message due to multiple 'From' addresses being specified in message while the Sender address was null. The endpoint sending the email address may be formatting the message incorrectly.";
+		private const string logWarningRequestBuildFromOverrideParsingFailed = "Dropped relay message due to 'From' address override failure. Unable to parse FromAddressOverride specified in application configuration.";
 		private const string logWarningRequestCanceled = "Dropped relay message due to unexpected Graph API request cancellation.";
 
 		private const string logErrorRequestFaulted = "Dropped relay message due to unexpected Graph API request fault. Please contact the developer.";
@@ -123,47 +129,98 @@ namespace GraphMailRelay
 							using (_logger.BeginScope(new Dictionary<string, object>
 							{
 								{ "MessageId", messageId.ToString() },
-								{ "From", message.From },
+								{ "Sender", message.Sender },
+								{ "From", string.Join(", ", message.From) },
 								{ "Recipients", string.Join(", ", message.To) }
 							}))
 							{
 								_logger.LogTrace(RelayLogEvents.GraphWorkerMessageDequeued, logTraceMessageDequeued);
 
-								if (_options.FromAddressOverride is not null)
-								{
-									_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildFromOverridden, logTraceRequestBuildFromOverridden);
-									_ = InternetAddress.TryParse(_options.FromAddressOverride, out InternetAddress fromAddress);
-
-									message.From.Clear();
-									message.From.Add(fromAddress);
-								}
-
-								using var mimeStream = new MemoryStream();
-								message.WriteTo(mimeStream);
-								mimeStream.Position = 0;
-
-								_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildStarted, logTraceRequestBuildStarted);
-								var graphMailRequest = _graphServiceClient
-									.Users[_options.AzureMailUser]
-									.SendMail
-									.ToPostRequestInformation(
-										new Microsoft.Graph.Users.Item.SendMail.SendMailPostRequestBody()
-									);
-
-								// This shouldn't be necessary, but since I'm not sure how to strip off the original content-type
-								// header using the SDK itself, just manually remove it and add the proper one for now as a workaround.
-								// TODO: Determine how to make this adjustment via the SDK itself.
-								graphMailRequest.Headers.Remove("Content-Type");
-								graphMailRequest.Headers.Add("Content-Type", "text/plain");
-
-								graphMailRequest.HttpMethod = Microsoft.Kiota.Abstractions.Method.POST;
-								graphMailRequest.Content = new StringContent(Convert.ToBase64String(mimeStream.ToArray()), Encoding.UTF8, "text/plain").ReadAsStream();
-
-								_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildFinished, logTraceRequestBuildFinished);
-
 								try
 								{
+									if (_options.FromAddressOverride is not null & _options.FromAddressOverride != string.Empty)
+									{
+										_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildFromOverrideStarted, logTraceRequestBuildFromOverrideStarted);
+
+										if (MailboxAddress.TryParse(_options.FromAddressOverride, out MailboxAddress addressOverride))
+										{
+											_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildFromOverrideParsed, logTraceRequestBuildFromOverrideParsed);
+
+											if (message.Sender is not null)
+											{
+												// Override the Sender address.
+												if (message.Sender.Address != addressOverride.Address)
+												{
+													_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildFromOverrideRequired, logTraceRequestBuildFromOverrideRequired);
+
+													message.Sender = addressOverride;
+
+													_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildFromOverrideComplete, logTraceRequestBuildFromOverrideComplete);
+												}
+												else
+												{
+													_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildFromOverrideSkipped, logTraceRequestBuildFromOverrideSkipped);
+												}
+											}
+											else
+											{
+												// Theoretically we should only have 1 address if the Sender address is null, but confirm anyways so we can 
+												// handle it and log a warning if not. This could mean the application isn't formatting the outgoing email
+												// properly. 
+												if (message.From.Count == 1)
+												{
+													if (((MailboxAddress)message.From.First()).Address != addressOverride.Address)
+													{
+														_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildFromOverrideRequired, logTraceRequestBuildFromOverrideRequired);
+
+														message.From.Clear();
+														message.From.Add(addressOverride);
+
+														_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildFromOverrideComplete, logTraceRequestBuildFromOverrideComplete);
+													}
+													else
+													{
+														_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildFromOverrideSkipped, logTraceRequestBuildFromOverrideSkipped);
+													}
+												}
+												else
+												{
+													_logger.LogWarning(RelayLogEvents.GraphWorkerRequestBuildFailedMultipleFromAddresses, logWarningRequestBuildFailedMultipleFromAddresses);
+												}
+											}
+
+										}
+										else
+										{
+											_logger.LogWarning(RelayLogEvents.GraphWorkerRequestBuildFromOverrideParsingFailed, logWarningRequestBuildFromOverrideParsingFailed);
+										}
+									}
+
+									using var mimeStream = new MemoryStream();
+									message.WriteTo(mimeStream);
+									mimeStream.Position = 0;
+
+									_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildStarted, logTraceRequestBuildStarted);
+									var graphMailRequest = _graphServiceClient
+										.Users[_options.AzureMailUser]
+										.SendMail
+										.ToPostRequestInformation(
+											new Microsoft.Graph.Users.Item.SendMail.SendMailPostRequestBody()
+										);
+
+									// This shouldn't be necessary, but since I'm not sure how to strip off the original content-type
+									// header using the SDK itself, just manually remove it and add the proper one for now as a workaround.
+									// TODO: Determine how to make this adjustment via the SDK itself.
+									graphMailRequest.Headers.Remove("Content-Type");
+									graphMailRequest.Headers.Add("Content-Type", "text/plain");
+
+									graphMailRequest.HttpMethod = Microsoft.Kiota.Abstractions.Method.POST;
+									graphMailRequest.Content = new StringContent(Convert.ToBase64String(mimeStream.ToArray()), Encoding.UTF8, "text/plain").ReadAsStream();
+
+									_logger.LogTrace(RelayLogEvents.GraphWorkerRequestBuildFinished, logTraceRequestBuildFinished);
+
 									_logger.LogDebug(RelayLogEvents.GraphWorkerRequestSending, logDebugRequestSending);
+
 									Task<MessageCollectionResponse?> requestTask = _graphServiceClient.RequestAdapter.SendAsync<MessageCollectionResponse>(graphMailRequest, MessageCollectionResponse.CreateFromDiscriminatorValue);
 									requestTask.Wait();
 
@@ -174,11 +231,11 @@ namespace GraphMailRelay
 											break;
 
 										case System.Threading.Tasks.TaskStatus.Canceled:
-											_logger.LogWarning(RelayLogEvents.GraphWorkerRequestCanceled, logWarningRequestCanceled);
+											_logger.LogWarning(RelayLogEvents.GraphWorkerRequestTaskCanceled, logWarningRequestCanceled);
 											break;
 
 										case System.Threading.Tasks.TaskStatus.Faulted:
-											_logger.LogError(RelayLogEvents.GraphWorkerRequestFaulted, logErrorRequestFaulted);
+											_logger.LogError(RelayLogEvents.GraphWorkerRequestTaskFaulted, logErrorRequestFaulted);
 											break;
 									}
 								}
@@ -195,8 +252,7 @@ namespace GraphMailRelay
 			}
 			else
 			{
-				_logger.LogTrace(RelayLogEvents.GraphWorkerCancelling, "Worker is cancelling execution.");
-				_stoppingCts.Cancel();
+				_logger.LogTrace(RelayLogEvents.GraphWorkerCancelling, "Worker is requesting application halt.");
 				_applicationLifetime.StopApplication();
 			}
 		}
@@ -280,11 +336,16 @@ namespace GraphMailRelay
 				optionsValidationFailed = true;
 			}
 
-			// This may be null, in which case it won't be used. Only verify its a valid email address.
-			if (!MailAddress.TryCreate(_options.AzureMailUser, out _))
+
+			// This may be null/empty, in which case it won't be used, so don't fail validation if it is.
+			if (_options.FromAddressOverride is not null & _options.FromAddressOverride != string.Empty)
 			{
-				optionsInvalid.Add(string.Format("{0}:AzureTenantId ('{1}' is not a valid email address)", GraphWorkerOptions.GraphConfiguration, _options.AzureMailUser));
-				optionsValidationFailed = true;
+				// Verify its a valid email address.
+				if (!MailAddress.TryCreate(_options.FromAddressOverride, out _))
+				{
+					optionsInvalid.Add(string.Format("{0}:FromAddressOverride ('{1}' is not a valid email address)", GraphWorkerOptions.GraphConfiguration, _options.FromAddressOverride));
+					optionsValidationFailed = true;
+				}
 			}
 
 			// Determine if validation failed. If so, build and log error message indicating which options are missing or invalid.
