@@ -13,7 +13,7 @@ namespace GraphMailRelay
 	internal class SmtpWorkerRelayStore : MessageStore
 	{
 		private const string logTraceMessageSaving = "Saving new message to relay store.";
-		private const string logDebugMessageQueuing = "Queuing new message.";
+		private const string logTraceMessageQueuing = "Queuing new message.";
 		private const string logDebugMessageQueued = "Queued new message.";
 
 		private readonly ILogger<SmtpWorker> _logger;
@@ -56,7 +56,7 @@ namespace GraphMailRelay
 					{ "Recipients", string.Join(", ", message.To) }
 				}))
 				{
-					_logger.LogDebug(RelayLogEvents.SmtpWorkerMessageQueuing, logDebugMessageQueuing);
+					_logger.LogTrace(RelayLogEvents.SmtpWorkerMessageQueuing, logTraceMessageQueuing);
 
 					// Write the message to the relay's queue channel which will later be picked up by the GraphWorker.
 					_queueWriter.WriteAsync(new KeyValuePair<Guid, MimeMessage>(messageId, message));

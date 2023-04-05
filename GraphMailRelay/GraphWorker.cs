@@ -248,7 +248,15 @@ namespace GraphMailRelay
 					}
 				}, _stoppingCts!.Token);
 
-				_logger.LogInformation(RelayLogEvents.GraphWorkerStarted, "Worker has started.");
+				if (_options.FromAddressOverride is not null & _options.FromAddressOverride != string.Empty)
+				{
+					string fromAddressOverride = _options.FromAddressOverride!;
+					_logger.LogInformation(RelayLogEvents.GraphWorkerStarted, "Worker has started. Outgoing Graph API requests will have the Sender/From address overridden to {fromAddressOverride}' in accordance with application configuration.", fromAddressOverride);
+				}
+				else
+				{
+					_logger.LogInformation(RelayLogEvents.GraphWorkerStarted, "Worker has started.");
+				}
 			}
 			else
 			{
