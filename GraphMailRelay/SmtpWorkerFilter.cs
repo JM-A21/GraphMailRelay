@@ -11,8 +11,8 @@ namespace GraphMailRelay
 		private const string logTraceMessageReceived = "Received message.";
 		private const string logDebugMessageAcceptedWhitelist = "Received message accepted due to whitelist match.";
 		private const string logWarningMessageRejectedFromEmpty = "Received message rejected due to missing From address.";
-		private const string logWarningMessageRejectedWhitelistEmpty = "Recieved message rejected due to empty sender address whitelist.";
-		private const string logWarningMessageRejectedWhitelistMismatch = "Recieved message rejected due to sender address whitelist mismatch.";
+		private const string logWarningMessageRejectedWhitelistEmpty = "Received message rejected due to empty sender address whitelist.";
+		private const string logWarningMessageRejectedWhitelistMismatch = "Received message rejected due to sender address whitelist mismatch.";
 
 		private readonly TimeSpan _delay;
 		private readonly SmtpWorkerOptions _options;
@@ -26,7 +26,7 @@ namespace GraphMailRelay
 			_options = options;
 		}
 
-		public override async Task<MailboxFilterResult> CanAcceptFromAsync(ISessionContext context, IMailbox from, int size, CancellationToken cancellationToken)
+		public override async Task<bool> CanAcceptFromAsync(ISessionContext context, IMailbox from, int size, CancellationToken cancellationToken)
 		{
 			await Task.Delay(_delay, cancellationToken);
 
@@ -34,38 +34,40 @@ namespace GraphMailRelay
 			string endpointAddressRemote = ((IPEndPoint)context.Properties[EndpointListener.RemoteEndPointKey]).Address.ToString();
 
 			// Begin logging activities.
-			using (_logger.BeginScope(new Dictionary<string, object>
-			{
+			using (_logger.BeginScope(new Dictionary<string, object> {
 				{ "SenderIP", endpointAddressRemote },
 				{ "From", from.AsAddress() }
 			}))
 			{
 				_logger.LogTrace(RelayLogEvents.SmtpWorkerMessageReceived, logTraceMessageReceived);
 
-				// Reject message with no sender/from address.
-				if (@from == Mailbox.Empty)
-				{
-					_logger.LogDebug(RelayLogEvents.SmtpWorkerMessageRejected, logWarningMessageRejectedFromEmpty);
-					return MailboxFilterResult.NoPermanently;
-				}
-
 				// Reject message if we have no whitelist to match against.
 				if (_options.AllowedSenderAddresses is null)
 				{
 					_logger.LogWarning(RelayLogEvents.SmtpWorkerMessageRejected, logWarningMessageRejectedWhitelistEmpty);
-					return MailboxFilterResult.NoTemporarily;
+					return false;
+				}
+
+				// Reject message with no sender/from address.
+				if (@from == Mailbox.Empty)
+				{
+					_logger.LogDebug(RelayLogEvents.SmtpWorkerMessageRejected, logWarningMessageRejectedFromEmpty);
+					return false;
 				}
 
 				// Reject message if the sending endpoint is not in our sender whitelist.
 				if (!_options.AllowedSenderAddresses.Contains(endpointAddressRemote))
 				{
 					_logger.LogWarning(RelayLogEvents.SmtpWorkerMessageRejected, logWarningMessageRejectedWhitelistMismatch);
-					return MailboxFilterResult.NoTemporarily;
+					return false;
 				}
-
-				// If we reach this point validation should be good. Accept the message.
-				_logger.LogDebug(RelayLogEvents.SmtpWorkerMessageAccepted, logDebugMessageAcceptedWhitelist);
-				return MailboxFilterResult.Yes;
+				// Accept otherwise.
+				else
+				{
+					// If we reach this point validation should be good. Accept the message.
+					_logger.LogDebug(RelayLogEvents.SmtpWorkerMessageAccepted, logDebugMessageAcceptedWhitelist);
+					return true;
+				}
 			}
 		}
 	}
