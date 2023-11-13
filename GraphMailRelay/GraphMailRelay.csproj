@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
+<Project Sdk="Microsoft.NET.Sdk.Worker">
 	<PropertyGroup>
 		<TargetFramework>net7.0-windows</TargetFramework>
 		<Nullable>enable</Nullable>
@@ -18,7 +18,7 @@
 		<PackageReference Include="McGuireV10.GenericHostBuilderLogger" Version="1.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.1" />
 		<PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="7.0.1" />
-		<PackageReference Include="Microsoft.Graph" Version="5.33.0" />
+		<PackageReference Include="Microsoft.Graph" Version="5.34.0" />
 		<PackageReference Include="MimeKit" Version="4.2.0" />
 		<PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.6.0" />
 		<PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.6.0" />
