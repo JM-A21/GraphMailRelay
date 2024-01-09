@@ -16,7 +16,7 @@
 	<ItemGroup>
 		<PackageReference Include="Azure.Identity" Version="1.10.4" />
 		<PackageReference Include="McGuireV10.GenericHostBuilderLogger" Version="1.0.0" />
-		<PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.1" />
+		<PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="7.0.1" />
 		<PackageReference Include="Microsoft.Graph" Version="5.35.0" />
 		<PackageReference Include="MimeKit" Version="4.3.0" />
