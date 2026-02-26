@@ -346,7 +346,6 @@ namespace GraphMailRelay
 				optionsValidationFailed = true;
 			}
 
-
 			// This may be null/empty, in which case it won't be used, so don't fail validation if it is.
 			if (_options.FromAddressOverride is not null & _options.FromAddressOverride != string.Empty)
 			{
