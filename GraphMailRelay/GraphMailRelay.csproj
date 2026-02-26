@@ -18,7 +18,7 @@
 		<PackageReference Include="McGuireV10.GenericHostBuilderLogger" Version="1.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
 		<PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.3" />
-		<PackageReference Include="Microsoft.Graph" Version="5.51.0" />
+		<PackageReference Include="Microsoft.Graph" Version="5.103.0" />
 		<PackageReference Include="MimeKit" Version="4.7.1" />
 		<PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.15.0" />
 		<PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.0" />
