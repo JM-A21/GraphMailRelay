@@ -109,9 +109,11 @@ namespace GraphMailRelay
 					{
 						AuthorityHost = azureAuthorityHost
 					});
-
 				var azureHttpClient = GraphClientFactory.Create(azureHandlers);
-				var azureAuthProvider = new AzureIdentityAuthenticationProvider(azureCredentials);
+				string[] azureScopes = [
+						"https://graph.microsoft.com/.default"
+					];
+				var azureAuthProvider = new AzureIdentityAuthenticationProvider(azureCredentials, null, null, true, azureScopes);
 				_graphServiceClient = new GraphServiceClient(azureHttpClient, azureAuthProvider, graphBaseUri.ToString());
 
 				// TODO: Validate that provide AzureMailUser exists and is valid so relay doesn't choke when trying to send real messages after startup.

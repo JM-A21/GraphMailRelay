@@ -11,24 +11,32 @@
 		this back to a more dynamic setup.
 		-->
 		<ComponentGroup Id="GraphMailRelayComponents">
+			<Files Include="!(bindpath.bin)**">
+				<Exclude Files="!(bindpath.bin)GraphMailRelay.exe" />
+			</Files>
+
 			<Component Id="GraphMailRelay" Directory="INSTALLFOLDER" Guid="*">
-				<File Id="GraphMailRelay" Source="GraphMailRelay.exe" Vital="true"/>
+				<File Id="GraphMailRelay" Source="!(bindpath.bin)GraphMailRelay.exe" Vital="true"/>
 				<ServiceInstall Id="GraphMailRelayService"
 								Name="GraphMailRelayService"
 								DisplayName="Graph Mail Relay Service"
 								Description="A simple relay service that accepts incoming mail on a configurable port and relays it via the Microsoft Graph API."
-								Vital="true" Interactive="false" Start="auto" Type="ownProcess" ErrorControl="normal" Account="LocalSystem">
+								Vital="true"
+								Interactive="false"
+								Start="auto"
+								Type="ownProcess"
+								ErrorControl="normal"
+								Account="LocalSystem">
 					<util:ServiceConfig FirstFailureActionType="restart"
 										SecondFailureActionType="restart"
 										ThirdFailureActionType="restart"
 										ResetPeriodInDays="1"
 										RestartServiceDelayInSeconds="60" />
 				</ServiceInstall>
-				
+
 				<!--
 				We can't have the service automatically start on install unless the installer accepts configuration parameters and
 				can place them somewhere the application can access, such as the appsettings.json file or the registry. 
-				<ServiceControl Id="GraphMailRelayService" Name="GraphMailRelayService" Start="install" Stop="both" Remove="uninstall" />
 				-->
 				<ServiceControl Id="GraphMailRelayService" Name="GraphMailRelayService" Stop="both" Remove="uninstall" />
 			</Component>

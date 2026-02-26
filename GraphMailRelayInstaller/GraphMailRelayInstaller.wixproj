@@ -1,13 +1,17 @@
-﻿<Project Sdk="WixToolset.Sdk/4.0.0-rc.4">
+﻿<Project Sdk="WixToolset.Sdk/6.0.2">
   <ItemGroup>
-    <ProjectReference Include="..\GraphMailRelay\GraphMailRelay.csproj" />
-    <BindPath Include="..\GraphMailRelay\bin\Release\net7.0-windows\publish" />
+    <BindPath Include="..\GraphMailRelay\bin\Release\net7.0-windows">
+      <BindName>bin</BindName>
+    </BindPath>
     <BindVariable Include="WixUILicenseRtf=..\LICENSE.rtf" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="WixToolset.Heat" Version="4.0.0-rc.4" />
-    <PackageReference Include="WixToolset.Netfx.wixext" Version="4.0.0-rc.4" />
-    <PackageReference Include="WixToolset.UI.wixext" Version="4.0.0-rc.4" />
-    <PackageReference Include="WixToolset.Util.wixext" Version="4.0.0-rc.4" />
+    <PackageReference Include="WixToolset.Heat" Version="6.0.2" />
+    <PackageReference Include="WixToolset.Netfx.wixext" Version="6.0.2" />
+    <PackageReference Include="WixToolset.UI.wixext" Version="6.0.2" />
+    <PackageReference Include="WixToolset.Util.wixext" Version="6.0.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\GraphMailRelay\GraphMailRelay.csproj" />
   </ItemGroup>
 </Project>
